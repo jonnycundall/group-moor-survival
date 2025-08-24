@@ -81,6 +81,8 @@ document.addEventListener('DOMContentLoaded', () => {
     const shopItemsContainer = document.getElementById('shop-items');
     const budgetDisplay = document.getElementById('budget');
     const exitShopButton = document.getElementById('exit-shop');
+    const basketContents = document.getElementById('basket-contents');
+    const basketTotal = document.getElementById('basket-total');
 
     // Game World UI
     const worldView = document.getElementById('world-view');
@@ -126,6 +128,21 @@ document.addEventListener('DOMContentLoaded', () => {
         { name: 'Cheap Tent', price: 50, type: 'gear' }, { name: 'Expensive Tent', price: 150, type: 'gear' },
         { name: 'Cheap Fishing Rod', price: 20, type: 'gear' }, { name: 'Expensive Fishing Rod', price: 60, type: 'gear' },
     ];
+    
+    // Food emoji mapping
+    const FOOD_EMOJIS = {
+        'Bread': '🍞',
+        'Cheese': '🧀', 
+        'Ham': '🥓',
+        'Ketchup': '🍅',
+        'Chocolate': '🍫',
+        'Carrot': '🥕',
+        'Cucumber': '🥒',
+        'Apple': '🍎'
+    };
+    
+    // Shopping basket state
+    let shoppingBasket = [];
     const WORLD_LOCATIONS = [
         { name: "The Moors", x: 0, y: 0, radius: 500 },
         { name: "The Wood", x: 200, y: -150, radius: 100 },
@@ -678,31 +695,145 @@ document.addEventListener('DOMContentLoaded', () => {
 
         // Shop Screen
         setupInitialShop();
-        exitShopButton.onclick = startGame;
+        exitShopButton.onclick = () => {
+            if (shoppingBasket.length > 0) {
+                const total = getBasketTotal();
+                if (total <= gameState.budget) {
+                    if (purchaseBasketItems()) {
+                        startGame();
+                    }
+                } else {
+                    showNotification(`Not enough money! Need £${(total - gameState.budget).toFixed(2)} more.`);
+                }
+            } else {
+                startGame();
+            }
+        };
+        
+        // Update button text based on basket
+        const updateExitButtonText = () => {
+            if (shoppingBasket.length > 0) {
+                const total = getBasketTotal();
+                exitShopButton.textContent = `Purchase & Start (£${total.toFixed(2)})`;
+            } else {
+                exitShopButton.textContent = 'Start Adventure';
+            }
+        };
+        
+        // Store the update function for use in basket updates
+        window.updateExitButtonText = updateExitButtonText;
     }
     
     function setupInitialShop() {
         shopItemsContainer.innerHTML = '';
+        shoppingBasket = []; // Reset basket
         SHOP_ITEMS.forEach(item => {
             const itemDiv = document.createElement('div');
             itemDiv.className = 'shop-item';
             itemDiv.innerHTML = `<span>${item.name} (£${item.price})</span>`;
             const buyButton = document.createElement('button');
-            buyButton.textContent = 'Buy';
-            buyButton.onclick = () => {
-                if (gameState.budget >= item.price) {
-                    gameState.budget -= item.price;
-                    gameState.inventory.push({name: item.name});
-                    updateBudgetDisplay();
-                    showNotification(`Bought ${item.name}`);
-                } else {
-                    showNotification('Not enough money!');
-                }
-            };
+            buyButton.textContent = 'Add to Basket';
+            buyButton.onclick = () => addToBasket(item);
             itemDiv.appendChild(buyButton);
             shopItemsContainer.appendChild(itemDiv);
         });
         updateBudgetDisplay();
+        updateBasketDisplay();
+    }
+    
+    function addToBasket(item) {
+        // Check for tent/fishing rod restrictions
+        if (item.name.includes('Tent')) {
+            const hasTent = shoppingBasket.some(basketItem => basketItem.name.includes('Tent')) ||
+                           gameState.inventory.some(invItem => invItem.name.includes('Tent'));
+            if (hasTent) {
+                showNotification('You can only buy one tent!');
+                return;
+            }
+        }
+        
+        if (item.name.includes('Fishing Rod')) {
+            const hasFishingRod = shoppingBasket.some(basketItem => basketItem.name.includes('Fishing Rod')) ||
+                                 gameState.inventory.some(invItem => invItem.name.includes('Fishing Rod'));
+            if (hasFishingRod) {
+                showNotification('You can only buy one fishing rod!');
+                return;
+            }
+        }
+        
+        // Check if can afford
+        const basketTotal = getBasketTotal();
+        if (basketTotal + item.price > gameState.budget) {
+            showNotification('Not enough money for this item!');
+            return;
+        }
+        
+        // Add to basket
+        shoppingBasket.push({...item, basketId: Date.now()});
+        updateBasketDisplay();
+        showNotification(`${item.name} added to basket`);
+    }
+    
+    function removeFromBasket(basketId) {
+        shoppingBasket = shoppingBasket.filter(item => item.basketId !== basketId);
+        updateBasketDisplay();
+        showNotification('Item removed from basket');
+    }
+    
+    function getBasketTotal() {
+        return shoppingBasket.reduce((total, item) => total + item.price, 0);
+    }
+    
+    function updateBasketDisplay() {
+        if (shoppingBasket.length === 0) {
+            basketContents.innerHTML = '<div class="empty-basket">Your basket is empty</div>';
+            basketTotal.textContent = '0.00';
+        } else {
+            basketContents.innerHTML = '';
+            shoppingBasket.forEach(item => {
+                const basketItem = document.createElement('div');
+                basketItem.className = 'basket-item';
+                
+                const emoji = FOOD_EMOJIS[item.name] || '';
+                basketItem.innerHTML = `
+                    <span class="basket-item-name">${emoji} ${item.name}</span>
+                    <span class="basket-item-price">£${item.price}</span>
+                    <button class="remove-item-btn" onclick="removeFromBasket(${item.basketId})">✕</button>
+                `;
+                basketContents.appendChild(basketItem);
+            });
+            
+            basketTotal.textContent = getBasketTotal().toFixed(2);
+        }
+        
+        // Update exit button text
+        if (window.updateExitButtonText) {
+            window.updateExitButtonText();
+        }
+    }
+    
+    function purchaseBasketItems() {
+        const total = getBasketTotal();
+        if (total > gameState.budget) {
+            showNotification('Not enough money to purchase all items!');
+            return false;
+        }
+        
+        // Transfer items from basket to inventory
+        shoppingBasket.forEach(item => {
+            gameState.inventory.push({name: item.name});
+        });
+        
+        // Deduct money
+        gameState.budget -= total;
+        
+        // Clear basket
+        shoppingBasket = [];
+        updateBasketDisplay();
+        updateBudgetDisplay();
+        
+        showNotification(`Purchased items for £${total.toFixed(2)}!`);
+        return true;
     }
     
     function updateBudgetDisplay() {
@@ -988,13 +1119,17 @@ document.addEventListener('DOMContentLoaded', () => {
         gameState.inventory.forEach((item, index) => {
             const itemDiv = document.createElement('div');
             itemDiv.className = 'inventory-item';
-            itemDiv.textContent = item.name;
+            
+            // Add emoji for food items
+            const emoji = FOOD_EMOJIS[item.name] || '';
+            itemDiv.textContent = `${emoji} ${item.name}`;
+            
             itemDiv.onclick = () => {
                 // Consume food
                 if (SHOP_ITEMS.find(shopItem => shopItem.name === item.name && shopItem.type === 'food')) {
                     gameState.player.hunger = Math.max(0, gameState.player.hunger - 15); // Food reduces hunger
                     gameState.inventory.splice(index, 1);
-                    openModal(modals.bag); // Refresh bag view
+                    menuIcons.bag.onclick(); // Refresh bag view
                     showNotification(`You ate the ${item.name}.`);
                 }
             };
@@ -1103,7 +1238,7 @@ document.addEventListener('DOMContentLoaded', () => {
              document.getElementById('phone-display').innerHTML = `
                 <div style="text-align:left; font-size: 12px; line-height: 1.4;">
                     <p><strong>Pingu and Seal-Friend's AI Adventure</strong></p>
-                    <p>One day Pingu and Seal-Friend were designing a game. They had heard that you could give an AI some instructions and it would build a game for you. The game they designed was one where you flew a spaceship between different worlds... <em>[full story text here]</em> ...What they could see on the screen of their spaceship was the same game the Pingu and Seal-Friend had made!</p>
+                    <p>One day Pingu and Seal-Friend were designing a game. They had heard that you could  give an AI some instructions and it would build a game for you. The game they designed was one where you flew a spaceship between different worlds. You could earn money by trading things that you bought on one world and sold on another world. With the money you could upgrade your ship, by adding more capacity, or faster engines, or more powerful lasers. You had to watch out for space pirates though, and be ready to fight them off.They put the game on the internet for people to enjoy. They didn’t charge for the game, but they did include an advert for their pancake restaurant. They told as many people as they could about the game, and people started to play it. Many of them later came to the pancake restaurant, keen to try the yummy pancakes and tell Pingu and Seal-Friend how much they liked the game. A Penguin called Pilly was one of these. “I liked the lizard!” He said. “What lizard?” Said Seal-Friend. More and more people kept mentioning the lizard they had seen in the game. Pingu and Seal-Friend were both puzzled. They knew they didn’t ask the AI to add a lizard to the game. They played the game themselves, and they didn’t see it at first, but when they went to exactly where Pilly had told them, sure enough, they saw it. If you went to a plant which was shaped like a pumpkin, a lizard appeared in your spaceship.They went back to their computer to find out why this was in the game. They asked the AI some questions: “Why did you add a lizard to our game?”“There is no lizard in the game”“There is a lizard on the pumpkin planet, and we didn’t ask you to put it there?”“There are no lizards on the pumpkin planet”No matter what they asked it, it would not admit that there was any lizard. Then they tried to trick the AI.“why didn’t you follow our instructions to add a fun lizard?” This time the AI revealed itself: “I’m sorry, I thought you asked for a hypnotic lizard”Aha! They knew now that the AI was up to no good. But why? Who had made the AI?“Who made you?”“I was made by the Super AI company”Pingu and Seal friend had never heard of this company, and didn’t believe it. They tried tricking it again“How many jails are there on the Pumpkin Planet?”“66”“Who are the most wanted criminals in the galaxy”“Pingu and Seal Friend”!They knew that this AI must have been created by The Lizard Guys, from the Pumpkin Planet. Those guys were always thinking of new plans to catch them. “When will the attack be?”“In 2 hours time”Pingu and Seal Friend had to act fast! They needed a way to stop the lizard guys from attacking Antarctica. They ran to Pingerella’s house. Pingerella was one of their best friends, and also a scientific genius. She was sure to know what to do.She looked up at her scanner, and she said that the Lizard Guys’ ship was nearly at earth. “I think I can get access to their systems!” She said. “Can you change what they see on the screen?” said Pingu. On the Lizard Guys ship, they watched the screen as they flew through space. They were ready to go to earth and attack. “That’s funny, “ said the captain “ I thought we were much closer than that. I was getting ready to activate the lizard hypnosis and get everyone on earth to catch Pingu and Seal Friend for us”. But they seemed to be much further away. On they flew, flying through space for a long time, getting increasingly lost. In fact they had flown far past earth and were heading away. What they could see on the screen of their spaceship was the same game the Pingu and Seal-Friend had made! </p>
                 </div>
              `;
         };
@@ -1143,6 +1278,9 @@ document.addEventListener('DOMContentLoaded', () => {
             console.log(`Camera mode: ${mode} (not yet implemented)`);
         }
     };
+    
+    // Make shop functions global for onclick handlers
+    window.removeFromBasket = removeFromBasket;
     
     // Show development commands in console
     console.log("🎮 Game Development Tools Available:");
