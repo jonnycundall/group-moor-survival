@@ -1,0 +1,292 @@
+/* --- Global Styles & Firewatch Palette --- */
+:root {
+    --bg-sky-day: #F7B267;
+    --bg-sky-dusk: #FF5A5F;
+    --bg-sky-night: #23395B;
+    --text-color: #F7F7F2;
+    --ui-background: rgba(35, 57, 91, 0.8);
+    --accent-color: #F7B267;
+    --disabled-color: #8C6E6E;
+    --bar-fill-color: #4CAF50;
+    --bar-background-color: #ddd;
+}
+
+body {
+    font-family: 'Helvetica Neue', sans-serif;
+    margin: 0;
+    padding: 0;
+    background-color: #000;
+    color: var(--text-color);
+    overflow: hidden;
+}
+
+/* --- Screen Management --- */
+.screen {
+    display: none;
+    width: 100vw;
+    height: 100vh;
+    justify-content: center;
+    align-items: center;
+    flex-direction: column;
+    text-align: center;
+}
+.screen.active {
+    display: flex;
+}
+
+/* --- Splash Screen --- */
+#splash-screen {
+    background: linear-gradient(to bottom, var(--bg-sky-dusk), var(--bg-sky-day));
+    cursor: pointer;
+}
+#splash-screen h1 {
+    font-size: 8vw;
+    font-weight: bold;
+    font-family: 'Verdana', sans-serif; /* A bubbly-style font */
+    color: white;
+    text-shadow: 4px 4px 8px rgba(0,0,0,0.5);
+}
+#splash-screen .by-line {
+    font-size: 2vw;
+}
+#splash-screen .background-image {
+    /* TODO: Add 'background-image: url("path/to/tent-on-moor.png");' */
+    width: 300px;
+    height: 200px;
+    background-color: #8C6E6E; /* Placeholder */
+    border: 2px solid var(--text-color);
+    margin-top: 20px;
+}
+
+
+/* --- Character Selection --- */
+.character-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 20px;
+    margin-top: 20px;
+}
+.character-card {
+    border: 2px solid var(--accent-color);
+    padding: 10px;
+    cursor: pointer;
+    transition: transform 0.2s;
+    background-color: var(--ui-background);
+}
+.character-card:hover {
+    transform: scale(1.1);
+    background-color: var(--accent-color);
+}
+.character-card img {
+    width: 100px;
+    height: 100px;
+    background-color: #ccc; /* Placeholder for child's drawing */
+    margin-bottom: 5px;
+}
+
+/* --- Shop Screen --- */
+#shop-screen {
+    background-color: var(--bg-sky-night);
+}
+.shop-container {
+    background-color: var(--ui-background);
+    padding: 20px;
+    border-radius: 10px;
+    width: 80%;
+    max-width: 600px;
+}
+#shop-items {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    margin: 20px 0;
+}
+.shop-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+button {
+    background-color: var(--accent-color);
+    border: none;
+    color: var(--bg-sky-night);
+    padding: 10px 20px;
+    font-size: 16px;
+    cursor: pointer;
+    border-radius: 5px;
+}
+
+/* --- Main Game World --- */
+#game-world {
+    justify-content: flex-start;
+}
+#three-canvas {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    z-index: 1;
+    background-color: #87CEEB; /* Sky blue fallback */
+    display: block; /* Ensure it's always visible */
+}
+.world-view {
+    width: 100%;
+    height: 100%;
+    position: absolute;
+    top: 0;
+    left: 0;
+    z-index: 2;
+    pointer-events: none; /* Allow canvas interactions */
+    background: none !important; /* Never override the 3D canvas */
+}
+#location-name {
+    position: absolute;
+    top: 20px;
+    left: 20px;
+    font-size: 24px;
+    text-shadow: 2px 2px 4px #000;
+    pointer-events: auto;
+}
+
+/* --- HUD (Heads-Up Display) --- */
+.hud {
+    position: absolute;
+    top: 20px;
+    right: 20px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    background-color: var(--ui-background);
+    padding: 10px;
+    border-radius: 5px;
+    z-index: 3;
+    pointer-events: auto;
+}
+.stat-bar {
+    width: 200px;
+}
+.bar-background {
+    width: 100%;
+    background-color: var(--bar-background-color);
+    border-radius: 5px;
+}
+.bar-fill {
+    height: 20px;
+    width: 0%; /* Starts at 0% */
+    background-color: var(--bar-fill-color);
+    border-radius: 5px;
+    transition: width 0.5s;
+}
+
+/* --- Menu Bar --- */
+.menu-bar {
+    position: absolute;
+    bottom: 20px;
+    display: flex;
+    gap: 10px;
+    background-color: var(--ui-background);
+    padding: 10px;
+    border-radius: 10px;
+    z-index: 3;
+    pointer-events: auto;
+}
+.menu-icon {
+    font-size: 40px;
+    cursor: pointer;
+    transition: transform 0.2s;
+    position: relative;
+}
+.menu-icon:hover {
+    transform: scale(1.2);
+}
+.menu-icon.disabled {
+    cursor: not-allowed;
+    filter: grayscale(100%);
+    opacity: 0.5;
+}
+.menu-icon:hover::after {
+    content: attr(data-tooltip);
+    position: absolute;
+    bottom: 120%;
+    left: 50%;
+    transform: translateX(-50%);
+    background-color: #000;
+    color: #fff;
+    padding: 5px;
+    border-radius: 5px;
+    white-space: nowrap;
+    font-size: 14px;
+}
+
+
+/* --- Modals (Pop-ups) --- */
+.modal {
+    display: none;
+    position: fixed;
+    z-index: 10;
+    left: 0;
+    top: 0;
+    width: 100%;
+    height: 100%;
+    background-color: rgba(0,0,0,0.6);
+    justify-content: center;
+    align-items: center;
+}
+.modal-content {
+    background-color: var(--ui-background);
+    padding: 20px;
+    border: 1px solid var(--accent-color);
+    width: 80%;
+    max-width: 500px;
+    max-height: 80vh;
+    overflow-y: auto;
+    position: relative;
+}
+.close-button {
+    color: #aaa;
+    position: absolute;
+    top: 10px;
+    right: 20px;
+    font-size: 28px;
+    font-weight: bold;
+    cursor: pointer;
+}
+.close-button:hover {
+    color: white;
+}
+#bag-contents, #generic-modal-content {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    margin-top: 15px;
+}
+.inventory-item {
+    border: 1px solid var(--accent-color);
+    padding: 10px;
+    cursor: pointer;
+}
+
+/* --- Notification & Cookie Consent --- */
+.notification {
+    position: fixed;
+    top: -100px;
+    left: 50%;
+    transform: translateX(-50%);
+    background-color: var(--accent-color);
+    color: var(--bg-sky-night);
+    padding: 15px;
+    border-radius: 5px;
+    transition: top 0.5s ease-in-out;
+    z-index: 100;
+}
+.cookie-consent {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    width: 100%;
+    background-color: var(--ui-background);
+    padding: 15px;
+    text-align: center;
+    z-index: 1000;
+}

@@ -1,0 +1,122 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Group Moor Survival</title>
+    <link rel="stylesheet" href="style.css">
+    <script src="https://unpkg.com/three@0.140.0/build/three.min.js"></script>
+    <script>
+        // Fallback Three.js loader
+        if (typeof THREE === 'undefined') {
+            console.log('Primary Three.js CDN failed, trying local fallback...');
+            const script = document.createElement('script');
+            script.src = './three.min.js';
+            script.onload = function() {
+                console.log('Local Three.js loaded successfully');
+            };
+            script.onerror = function() {
+                console.error('All Three.js sources failed to load');
+                alert('Unable to load 3D graphics library. The game will run without 3D graphics.');
+            };
+            document.head.appendChild(script);
+        }
+    </script>
+</head>
+<body>
+
+    <div id="cookie-consent" class="cookie-consent">
+        <p>This website uses cookies to save your game progress. By continuing to play, you agree to our use of cookies.</p>
+        <button id="accept-cookies">I Understand</button>
+    </div>
+
+    <div id="splash-screen" class="screen active">
+        <h1>Group Moor Survival</h1>
+        <p class="by-line">by Sophie</p>
+        <div class="background-image"></div> </div>
+
+    <div id="companion-screen" class="screen">
+        <h2>Choose Your Companion</h2>
+        <p>You will be sharing your adventure with this companion.</p>
+        <div class="character-grid" id="companion-grid">
+            </div>
+    </div>
+
+    <div id="doctor-screen" class="screen">
+        <h2>Choose Your Doctor</h2>
+        <p>Your doctor will help if you get sick from ticks or hunger.</p>
+        <div class="character-grid" id="doctor-grid">
+            </div>
+    </div>
+
+    <div id="shop-screen" class="screen">
+        <h2>Shop</h2>
+        <div class="shop-container">
+            <p>Budget: £<span id="budget">300</span></p>
+            <div id="shop-items">
+                </div>
+            <button id="exit-shop">Start Adventure</button>
+        </div>
+    </div>
+
+    <div id="game-world" class="screen">
+        <canvas id="three-canvas"></canvas>
+        <div class="world-view" id="world-view">
+            <div id="location-name">The Moors</div>
+        </div>
+
+        <div class="hud">
+            <div class="stat-bar">
+                <label for="hunger-bar">Hunger</label>
+                <div class="bar-background">
+                    <div id="hunger-bar" class="bar-fill"></div>
+                </div>
+            </div>
+            <div id="game-time-display">Day 1, Spring, Morning</div>
+        </div>
+
+        <div class="menu-bar">
+            <div class="menu-icon" id="menu-bag" data-tooltip="Bag">🎒</div>
+            <div class="menu-icon disabled" id="menu-fishing" data-tooltip="Fishing (Near River)">🎣</div>
+            <div class="menu-icon" id="menu-ticks" data-tooltip="Check for Ticks">🕷️</div>
+            <div class="menu-icon" id="menu-clothes" data-tooltip="Clothes">👕</div>
+            <div class="menu-icon" id="menu-seeds" data-tooltip="Plant Seeds">🌱</div>
+            <div class="menu-icon disabled" id="menu-pony" data-tooltip="Pony Hire (Near Farm)">🐴</div>
+            <div class="menu-icon disabled" id="menu-sleep" data-tooltip="Sleep (At Tent, Evening)">😴</div>
+            <div class="menu-icon" id="menu-camp" data-tooltip="Manage Camp">⛺</div>
+            <div class="menu-icon" id="menu-recipes" data-tooltip="Recipes">📖</div>
+            <div class="menu-icon"  id="menu-phone" data-tooltip="Smartphone">📱</div>
+            <div class="menu-icon" id="menu-badges" data-tooltip="Badges">🏆</div>
+        </div>
+
+        <div id="bag-modal" class="modal">
+            <div class="modal-content">
+                <span class="close-button">&times;</span>
+                <h2>Your Bag</h2>
+                <div id="bag-contents"></div>
+            </div>
+        </div>
+
+        <div id="generic-modal" class="modal">
+             <div class="modal-content">
+                <span class="close-button">&times;</span>
+                <h2 id="generic-modal-title"></h2>
+                <div id="generic-modal-content"></div>
+            </div>
+        </div>
+
+        <div id="sent-home-modal" class="modal">
+             <div class="modal-content">
+                <h2>You Were Sent Home</h2>
+                <p id="sent-home-reason"></p>
+                <button id="return-to-shop">Try Again</button>
+            </div>
+        </div>
+
+        <div id="notification" class="notification"></div>
+
+    </div>
+
+    <script src="script.js"></script>
+</body>
+</html>
