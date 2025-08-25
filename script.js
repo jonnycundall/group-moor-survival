@@ -1,6 +1,9 @@
 document.addEventListener('DOMContentLoaded', () => {
+    console.log('🎮 DOM Content Loaded - Starting Game');
+    
     // Function to check if Three.js is loaded and start the game
     function initializeGame() {
+        console.log('🔧 initializeGame() called');
         // Check if Three.js is loaded
         if (typeof THREE === 'undefined') {
             console.error("Three.js is not loaded! Retrying...");
@@ -19,12 +22,16 @@ document.addEventListener('DOMContentLoaded', () => {
         }
         
         // Start the actual game initialization
+        console.log('🚀 About to call startGameInitialization()');
         startGameInitialization();
     }
     
     function startGameInitialization() {
-        console.log("Starting game initialization...");
+        console.log("🎯 Starting game initialization...");
         
+        try {
+            console.log("📋 Defining constants and state...");
+            
         // --- STATE MANAGEMENT ---
     let gameState = {};
 
@@ -45,12 +52,14 @@ document.addEventListener('DOMContentLoaded', () => {
             x: 0,
             y: 0,
             speed: 2,
+            rotation: 0, // Player facing direction in radians
             hunger: 0, // 0-100
             isRunning: false,
         },
         world: {
             tentPitched: false,
             tentLocation: { x: null, y: null },
+            tentType: null, // 'cheap' or 'expensive'
             plantedSeeds: [],
         },
         ticks: 0,
@@ -141,23 +150,93 @@ document.addEventListener('DOMContentLoaded', () => {
         'Apple': '🍎'
     };
     
+    // Recipe system
+    const RECIPES = [
+        {
+            name: 'Ham Sandwich',
+            emoji: '🥪',
+            ingredients: ['Bread', 'Ham'],
+            hungerValue: 35, // More filling than individual ingredients
+            description: 'A hearty ham sandwich'
+        },
+        {
+            name: 'Cheese Sandwich', 
+            emoji: '🧀🍞',
+            ingredients: ['Bread', 'Cheese'],
+            hungerValue: 30,
+            description: 'Simple but satisfying cheese sandwich'
+        },
+        {
+            name: 'Ham & Cheese Sandwich',
+            emoji: '🥪🧀',
+            ingredients: ['Bread', 'Ham', 'Cheese'],
+            hungerValue: 45,
+            description: 'The ultimate sandwich combination'
+        },
+        {
+            name: 'Garden Salad',
+            emoji: '🥗',
+            ingredients: ['Carrot', 'Cucumber'],
+            hungerValue: 25,
+            description: 'Fresh and healthy vegetables'
+        },
+        {
+            name: 'Carrot Sticks with Ketchup',
+            emoji: '🥕🍅',
+            ingredients: ['Carrot', 'Ketchup'],
+            hungerValue: 20,
+            description: 'An unusual but surprisingly tasty combination'
+        },
+        {
+            name: 'Apple Slices with Cheese',
+            emoji: '🍎🧀',
+            ingredients: ['Apple', 'Cheese'],
+            hungerValue: 25,
+            description: 'Sweet and savory fruit and cheese plate'
+        },
+        {
+            name: 'Chocolate Apple',
+            emoji: '🍎🍫',
+            ingredients: ['Apple', 'Chocolate'],
+            hungerValue: 30,
+            description: 'Decadent chocolate-covered apple treat'
+        },
+        {
+            name: 'Moorland Feast',
+            emoji: '🍽️',
+            ingredients: ['Bread', 'Ham', 'Cheese', 'Apple', 'Carrot'],
+            hungerValue: 60,
+            description: 'A complete meal using the best of your supplies'
+        }
+    ];
+    
     // Shopping basket state
     let shoppingBasket = [];
     const WORLD_LOCATIONS = [
-        { name: "The Moors", x: 0, y: 0, radius: 500 },
-        { name: "The Wood", x: 200, y: -150, radius: 100 },
-        { name: "The River", x: -100, y: 200, radius: 300 },
-        { name: "A Cave", x: 250, y: -180, radius: 10 },
-        { name: "ASDA", x: -200, y: -200, radius: 20 },
-        { name: "Pony Farm", x: 100, y: 300, radius: 20 },
+        { name: "The Moors", x: 0, y: 0, radius: 800 },
+        { name: "The Ancient Stone Circle", x: 300, y: -200, radius: 50 },
+        { name: "The River Valley", x: -200, y: 0, radius: 200 },
+        { name: "The Waterfall", x: -250, y: 150, radius: 30 },
+        { name: "Heather Fields", x: 400, y: 300, radius: 150 },
+        { name: "Rocky Outcrop", x: 500, y: -400, radius: 80 },
+        { name: "The Lone Tree", x: -400, y: -300, radius: 25 },
+        { name: "ASDA", x: -600, y: -600, radius: 30 },
+        { name: "Pony Farm", x: 400, y: 600, radius: 40 },
     ];
     const SEASONS = { 1: 'Spring', 2: 'Summer', 3: 'Autumn', 4: 'Winter' };
 
     // --- 3D WORLD SETUP ---
     let scene, camera, renderer, terrain, player3D, controls;
-    let terrainSize = 1000;
-    let terrainDetail = 64;
+    let terrainSize = 2000;  // Make map much bigger
+    let terrainDetail = 128; // Higher detail for better terrain
     let frameCount = 0;
+    let companion3D = null;
+    let companionTarget = { x: 0, z: 0 };
+    let companionWanderTimer = 0;
+    let riverMesh = null;
+    let waterfallMesh = null;
+    let tentMesh = null;
+    let tentType = null; // 'cheap' or 'expensive'
     
     function init3DWorld() {
         if (window.no3DGraphics) {
@@ -172,9 +251,9 @@ document.addEventListener('DOMContentLoaded', () => {
             scene = new THREE.Scene();
             console.log("Scene created");
             
-            // Create camera
+            // Create camera (first-person)
             camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 2000);
-            camera.position.set(0, 50, 100);
+            camera.position.set(0, 10, 0); // First-person height
             console.log("Camera created");
             
             // Create renderer
@@ -216,6 +295,10 @@ document.addEventListener('DOMContentLoaded', () => {
             createPlayer3D();
             console.log("Player created");
             
+            // Create companion
+            createCompanion3D();
+            console.log("Companion creation initiated");
+            
             // Add a test cube to verify rendering
             const testGeometry = new THREE.BoxGeometry(10, 10, 10);
             const testMaterial = new THREE.MeshLambertMaterial({ color: 0xff0000 });
@@ -256,31 +339,38 @@ document.addEventListener('DOMContentLoaded', () => {
     function createTerrain() {
         const geometry = new THREE.PlaneGeometry(terrainSize, terrainSize, terrainDetail - 1, terrainDetail - 1);
         
-        // Generate height map
+        // Generate height map for English moorland
         const vertices = geometry.attributes.position.array;
         for (let i = 0; i < vertices.length; i += 3) {
             const x = vertices[i];
             const z = vertices[i + 1];
             
-            // Create varied terrain using noise-like functions
+            // Create rolling moorland hills with multiple noise layers
             let height = 0;
             
-            // Base rolling hills
-            height += Math.sin(x * 0.01) * 20 + Math.cos(z * 0.01) * 15;
+            // Large rolling hills (primary terrain features)
+            height += Math.sin(x * 0.003) * 50 + Math.cos(z * 0.003) * 40;
+            height += Math.sin(x * 0.002 + z * 0.002) * 30;
             
-            // Add some sharper features for The Wood area
-            if (x > 150 && x < 250 && z > -200 && z < -100) {
-                height += Math.sin(x * 0.02) * 30 + Math.cos(z * 0.02) * 25;
+            // Medium undulations (secondary features)
+            height += Math.sin(x * 0.008) * 15 + Math.cos(z * 0.008) * 12;
+            height += Math.sin(x * 0.015 + z * 0.01) * 8;
+            
+            // Fine detail for moorland texture
+            height += Math.sin(x * 0.05) * 3 + Math.cos(z * 0.05) * 2;
+            height += (Math.random() - 0.5) * 4; // Random variation
+            
+            // Create river valley - lower terrain along river path
+            const riverX = -200;
+            const riverDistanceFromCenter = Math.abs(x - riverX);
+            if (riverDistanceFromCenter < 150) {
+                const riverDepth = (150 - riverDistanceFromCenter) / 150;
+                height -= riverDepth * riverDepth * 25; // Gradual valley
             }
             
-            // River valley (lower terrain)
-            if (x > -150 && x < -50 && z > 150 && z < 250) {
-                height -= 20;
-            }
-            
-            // Cave area (rocky terrain)
-            if (x > 200 && x < 300 && z > -230 && z < -130) {
-                height += Math.random() * 40 - 20;
+            // Create waterfall cliff area
+            if (x > -300 && x < -200 && z > 100 && z < 200) {
+                height += Math.sin((x + 300) * 0.02) * 60; // Sharp cliff face
             }
             
             vertices[i + 2] = height;
@@ -289,10 +379,51 @@ document.addEventListener('DOMContentLoaded', () => {
         geometry.attributes.position.needsUpdate = true;
         geometry.computeVertexNormals();
         
-        // Create material with different colors for different areas
+        // Create moorland material with texture
+        const canvas = document.createElement('canvas');
+        canvas.width = 512;
+        canvas.height = 512;
+        const context = canvas.getContext('2d');
+        
+        // Create moorland texture
+        const gradient = context.createRadialGradient(256, 256, 0, 256, 256, 256);
+        gradient.addColorStop(0, '#8FBC8F'); // Sage green
+        gradient.addColorStop(0.3, '#9ACD32'); // Yellow green  
+        gradient.addColorStop(0.6, '#8B7355'); // Brown moorland
+        gradient.addColorStop(1, '#696969'); // Gray rocks
+        
+        context.fillStyle = gradient;
+        context.fillRect(0, 0, 512, 512);
+        
+        // Add texture details - heather patches and grass
+        for (let i = 0; i < 200; i++) {
+            const x = Math.random() * 512;
+            const y = Math.random() * 512;
+            const size = Math.random() * 8 + 2;
+            
+            // Heather patches (purple)
+            if (Math.random() > 0.6) {
+                context.fillStyle = '#8B7AA5';
+                context.beginPath();
+                context.arc(x, y, size, 0, Math.PI * 2);
+                context.fill();
+            }
+            
+            // Grass tufts (green)
+            if (Math.random() > 0.7) {
+                context.fillStyle = '#228B22';
+                context.fillRect(x, y, size * 0.5, size);
+            }
+        }
+        
+        const texture = new THREE.CanvasTexture(canvas);
+        texture.wrapS = THREE.RepeatWrapping;
+        texture.wrapT = THREE.RepeatWrapping;
+        texture.repeat.set(8, 8); // Tile the texture
+        
         const material = new THREE.MeshLambertMaterial({ 
-            color: 0x90EE90,
-            vertexColors: false
+            map: texture,
+            color: 0xFFFFFF // Don't tint the texture
         });
         
         terrain = new THREE.Mesh(geometry, material);
@@ -300,53 +431,242 @@ document.addEventListener('DOMContentLoaded', () => {
         terrain.receiveShadow = true;
         scene.add(terrain);
         
-        // Add terrain textures/colors for different biomes
-        addTerrainVariation();
+        // Add terrain features
+        addMoorlandFeatures();
+        createRiverSystem();
     }
     
-    function addTerrainVariation() {
-        // Add trees for The Wood
-        const treeGeometry = new THREE.ConeGeometry(5, 20, 8);
-        const treeMaterial = new THREE.MeshLambertMaterial({ color: 0x228B22 });
+    function addMoorlandFeatures() {
+        // Add heather bushes across the moors
+        const heatherGeometry = new THREE.SphereGeometry(3, 6, 4);
+        const heatherMaterial = new THREE.MeshLambertMaterial({ color: 0x8B7AA5 }); // Purple heather
         
-        for (let i = 0; i < 30; i++) {
-            const tree = new THREE.Mesh(treeGeometry, treeMaterial);
-            tree.position.set(
-                150 + Math.random() * 100,
-                getTerrainHeight(tree.position.x, tree.position.z) + 10,
-                -200 + Math.random() * 100
+        for (let i = 0; i < 100; i++) {
+            const heather = new THREE.Mesh(heatherGeometry, heatherMaterial);
+            const x = (Math.random() - 0.5) * terrainSize * 0.8;
+            const z = (Math.random() - 0.5) * terrainSize * 0.8;
+            heather.position.set(
+                x,
+                getTerrainHeight(x, z) + 1,
+                z
             );
-            tree.castShadow = true;
-            scene.add(tree);
+            heather.scale.set(
+                0.5 + Math.random() * 0.5,
+                0.3 + Math.random() * 0.3,
+                0.5 + Math.random() * 0.5
+            );
+            scene.add(heather);
         }
         
-        // Add rocks for cave area
-        const rockGeometry = new THREE.SphereGeometry(3, 8, 6);
+        // Add scattered rocks typical of moorland
+        const rockGeometry = new THREE.SphereGeometry(4, 8, 6);
         const rockMaterial = new THREE.MeshLambertMaterial({ color: 0x696969 });
         
-        for (let i = 0; i < 20; i++) {
+        for (let i = 0; i < 80; i++) {
             const rock = new THREE.Mesh(rockGeometry, rockMaterial);
+            const x = (Math.random() - 0.5) * terrainSize * 0.9;
+            const z = (Math.random() - 0.5) * terrainSize * 0.9;
             rock.position.set(
-                200 + Math.random() * 100,
-                getTerrainHeight(rock.position.x, rock.position.z) + 2,
-                -230 + Math.random() * 100
+                x,
+                getTerrainHeight(x, z) + 2,
+                z
             );
-            rock.scale.set(Math.random() + 0.5, Math.random() + 0.5, Math.random() + 0.5);
+            rock.scale.set(
+                0.3 + Math.random() * 1.2,
+                0.3 + Math.random() * 0.8,
+                0.3 + Math.random() * 1.2
+            );
+            rock.rotation.set(
+                Math.random() * Math.PI,
+                Math.random() * Math.PI,
+                Math.random() * Math.PI
+            );
             rock.castShadow = true;
             scene.add(rock);
         }
         
-        // Add water plane for river
-        const waterGeometry = new THREE.PlaneGeometry(100, 100);
-        const waterMaterial = new THREE.MeshLambertMaterial({ 
+        // Add some ancient stone circles (typical of English moors)
+        for (let circle = 0; circle < 3; circle++) {
+            const centerX = (Math.random() - 0.5) * terrainSize * 0.6;
+            const centerZ = (Math.random() - 0.5) * terrainSize * 0.6;
+            const radius = 20 + Math.random() * 30;
+            const stones = 6 + Math.floor(Math.random() * 6);
+            
+            for (let i = 0; i < stones; i++) {
+                const angle = (i / stones) * Math.PI * 2;
+                const stoneX = centerX + Math.cos(angle) * radius;
+                const stoneZ = centerZ + Math.sin(angle) * radius;
+                
+                const stoneGeometry = new THREE.BoxGeometry(3, 8 + Math.random() * 6, 2);
+                const stone = new THREE.Mesh(stoneGeometry, rockMaterial);
+                stone.position.set(
+                    stoneX,
+                    getTerrainHeight(stoneX, stoneZ) + 4,
+                    stoneZ
+                );
+                stone.rotation.y = angle + (Math.random() - 0.5) * 0.5;
+                stone.castShadow = true;
+                scene.add(stone);
+            }
+        }
+        
+        // Add some trees but sparse, as typical of moorland
+        const treeGeometry = new THREE.ConeGeometry(4, 15, 8);
+        const treeMaterial = new THREE.MeshLambertMaterial({ color: 0x228B22 });
+        
+        for (let i = 0; i < 40; i++) {
+            const tree = new THREE.Mesh(treeGeometry, treeMaterial);
+            const x = (Math.random() - 0.5) * terrainSize * 0.7;
+            const z = (Math.random() - 0.5) * terrainSize * 0.7;
+            
+            // Avoid placing trees in river valley
+            if (Math.abs(x + 200) > 100) {
+                tree.position.set(
+                    x,
+                    getTerrainHeight(x, z) + 7,
+                    z
+                );
+                tree.castShadow = true;
+                scene.add(tree);
+            }
+        }
+    }
+    
+    function createRiverSystem() {
+        // Create the main river flowing through the valley
+        const riverPath = [];
+        const riverWidth = 20;
+        
+        // Generate river path from north to south with curves
+        for (let z = -800; z <= 800; z += 10) {
+            const x = -200 + Math.sin(z * 0.003) * 30; // Meandering river
+            riverPath.push(new THREE.Vector3(x, getTerrainHeight(x, z) - 2, z));
+        }
+        
+        // Create river segments
+        for (let i = 0; i < riverPath.length - 1; i++) {
+            const start = riverPath[i];
+            const end = riverPath[i + 1];
+            const length = start.distanceTo(end);
+            
+            const riverGeometry = new THREE.PlaneGeometry(riverWidth, length);
+            const riverMaterial = new THREE.MeshLambertMaterial({ 
+                color: 0x4169E1, 
+                transparent: true, 
+                opacity: 0.8
+            });
+            
+            const riverSegment = new THREE.Mesh(riverGeometry, riverMaterial);
+            riverSegment.position.copy(start).lerp(end, 0.5);
+            riverSegment.rotation.x = -Math.PI / 2;
+            riverSegment.rotation.z = Math.atan2(end.z - start.z, end.x - start.x);
+            scene.add(riverSegment);
+        }
+        
+        // Create waterfall
+        createWaterfall();
+        
+        // Add some river rocks
+        for (let i = 0; i < 30; i++) {
+            const rockGeometry = new THREE.SphereGeometry(1 + Math.random() * 2, 6, 4);
+            const rockMaterial = new THREE.MeshLambertMaterial({ color: 0x555555 });
+            const rock = new THREE.Mesh(rockGeometry, rockMaterial);
+            
+            const riverZ = (Math.random() - 0.5) * 1600;
+            const riverX = -200 + Math.sin(riverZ * 0.003) * 30;
+            const offsetX = (Math.random() - 0.5) * 40;
+            
+            rock.position.set(
+                riverX + offsetX,
+                getTerrainHeight(riverX + offsetX, riverZ) + 1,
+                riverZ
+            );
+            rock.castShadow = true;
+            scene.add(rock);
+        }
+    }
+    
+    function createWaterfall() {
+        // Create the waterfall at the cliff face
+        const waterfallX = -250;
+        const waterfallZ = 150;
+        const waterfallHeight = 50;
+        
+        // Waterfall effect using a plane with animated texture
+        const waterfallGeometry = new THREE.PlaneGeometry(15, waterfallHeight);
+        
+        // Create animated water texture
+        const canvas = document.createElement('canvas');
+        canvas.width = 64;
+        canvas.height = 256;
+        const context = canvas.getContext('2d');
+        
+        // Create vertical flowing water pattern
+        const gradient = context.createLinearGradient(0, 0, 0, 256);
+        gradient.addColorStop(0, 'rgba(135, 206, 235, 0.9)'); // Sky blue
+        gradient.addColorStop(0.3, 'rgba(255, 255, 255, 0.8)'); // White foam
+        gradient.addColorStop(0.6, 'rgba(70, 130, 180, 0.9)'); // Steel blue
+        gradient.addColorStop(1, 'rgba(25, 25, 112, 0.9)'); // Midnight blue
+        
+        context.fillStyle = gradient;
+        context.fillRect(0, 0, 64, 256);
+        
+        // Add some flowing lines
+        context.strokeStyle = 'rgba(255, 255, 255, 0.6)';
+        context.lineWidth = 2;
+        for (let i = 0; i < 8; i++) {
+            context.beginPath();
+            context.moveTo(10 + i * 6, 0);
+            context.lineTo(15 + i * 6, 256);
+            context.stroke();
+        }
+        
+        const waterfallTexture = new THREE.CanvasTexture(canvas);
+        const waterfallMaterial = new THREE.MeshLambertMaterial({ 
+            map: waterfallTexture,
+            transparent: true, 
+            opacity: 0.9,
+            side: THREE.DoubleSide
+        });
+        
+        waterfallMesh = new THREE.Mesh(waterfallGeometry, waterfallMaterial);
+        waterfallMesh.position.set(
+            waterfallX,
+            getTerrainHeight(waterfallX, waterfallZ) + waterfallHeight / 2,
+            waterfallZ
+        );
+        scene.add(waterfallMesh);
+        
+        // Create waterfall pool at the bottom
+        const poolGeometry = new THREE.CircleGeometry(12, 16);
+        const poolMaterial = new THREE.MeshLambertMaterial({ 
             color: 0x4169E1, 
             transparent: true, 
             opacity: 0.7 
         });
-        const water = new THREE.Mesh(waterGeometry, waterMaterial);
-        water.rotation.x = -Math.PI / 2;
-        water.position.set(-100, getTerrainHeight(-100, 200) + 1, 200);
-        scene.add(water);
+        const pool = new THREE.Mesh(poolGeometry, poolMaterial);
+        pool.rotation.x = -Math.PI / 2;
+        pool.position.set(
+            waterfallX,
+            getTerrainHeight(waterfallX, waterfallZ) + 0.5,
+            waterfallZ
+        );
+        scene.add(pool);
+        
+        // Add mist/spray effect around waterfall
+        const mistGeometry = new THREE.SphereGeometry(8, 8, 6);
+        const mistMaterial = new THREE.MeshLambertMaterial({ 
+            color: 0xFFFFFF, 
+            transparent: true, 
+            opacity: 0.3 
+        });
+        const mist = new THREE.Mesh(mistGeometry, mistMaterial);
+        mist.position.set(
+            waterfallX,
+            getTerrainHeight(waterfallX, waterfallZ) + 10,
+            waterfallZ
+        );
+        scene.add(mist);
     }
     
     function createPlayer3D() {
@@ -356,41 +676,255 @@ document.addEventListener('DOMContentLoaded', () => {
         player3D = new THREE.Mesh(playerGeometry, playerMaterial);
         player3D.castShadow = true;
         scene.add(player3D);
+        
+        // Make player invisible in first-person mode
+        player3D.visible = false;
+    }
+    
+    function createCompanion3D() {
+        if (!gameState.companion || window.no3DGraphics) return;
+        
+        console.log(`Creating companion for: ${gameState.companion}`);
+        
+        // For now, let's create a textured plane that we know will work
+        // We'll use a simple color and add text to identify the companion
+        const geometry = new THREE.PlaneGeometry(20, 20);
+        
+        // Create a canvas texture with the companion name
+        const canvas = document.createElement('canvas');
+        canvas.width = 256;
+        canvas.height = 256;
+        const context = canvas.getContext('2d');
+        
+        // Draw background
+        context.fillStyle = '#4169E1';
+        context.fillRect(0, 0, 256, 256);
+        
+        // Draw companion name
+        context.fillStyle = 'white';
+        context.font = 'bold 24px Arial';
+        context.textAlign = 'center';
+        context.fillText(gameState.companion, 128, 128);
+        
+        // Create texture from canvas
+        const texture = new THREE.CanvasTexture(canvas);
+        const material = new THREE.MeshLambertMaterial({ 
+            map: texture,
+            transparent: true,
+            side: THREE.DoubleSide
+        });
+        
+        companion3D = new THREE.Mesh(geometry, material);
+        companion3D.position.set(
+            gameState.player.x + 30,
+            getTerrainHeight(gameState.player.x + 30, gameState.player.y) + 10,
+            gameState.player.y
+        );
+        
+        scene.add(companion3D);
+        console.log(`Companion ${gameState.companion} created as labeled plane`);
+        
+        companionTarget.x = companion3D.position.x;
+        companionTarget.z = companion3D.position.z;
+        
+        // Now try to load the actual image and replace the texture
+        tryLoadCompanionImage();
+    }
+    
+    function tryLoadCompanionImage() {
+        const loader = new THREE.TextureLoader();
+        let imageName = gameState.companion.toLowerCase();
+        if (gameState.companion === 'Sophie') {
+            imageName = 'Sophie';
+        }
+        
+        // Try the most likely working path first
+        const imagePath = `public/images/companions/${imageName}.png`;
+        
+        console.log(`Attempting to load companion image: ${imagePath}`);
+        
+        loader.load(
+            imagePath,
+            function(texture) {
+                console.log('Successfully loaded companion image!');
+                if (companion3D && companion3D.material) {
+                    companion3D.material.map = texture;
+                    companion3D.material.needsUpdate = true;
+                    console.log('Updated companion texture');
+                }
+            },
+            function(progress) {
+                console.log('Image loading progress:', Math.round(progress.loaded / progress.total * 100) + '%');
+            },
+            function(error) {
+                console.log('Failed to load companion image, keeping text placeholder');
+                console.error('Texture loading error:', error);
+            }
+        );
+    }
+    
+    function createCompanionFallback() {
+        const companionGeometry = new THREE.BoxGeometry(8, 12, 4);
+        const companionMaterial = new THREE.MeshLambertMaterial({ color: 0x4169E1 });
+        companion3D = new THREE.Mesh(companionGeometry, companionMaterial);
+        companion3D.position.set(
+            gameState.player.x + 30,
+            getTerrainHeight(gameState.player.x + 30, gameState.player.y) + 6,
+            gameState.player.y
+        );
+        companion3D.castShadow = true;
+        scene.add(companion3D);
+        console.log('Companion created as fallback cube');
+        
+        companionTarget.x = companion3D.position.x;
+        companionTarget.z = companion3D.position.z;
+    }
+    
+    function createTent3D(x, z, type) {
+        if (window.no3DGraphics) return;
+        
+        // Remove existing tent if any
+        if (tentMesh) {
+            scene.remove(tentMesh);
+            tentMesh = null;
+        }
+        
+        tentType = type;
+        const terrainHeight = getTerrainHeight(x, z);
+        
+        // Create tent geometry - simple triangular tent shape
+        const tentGeometry = new THREE.ConeGeometry(8, 12, 4);
+        
+        // Load tent texture based on type
+        const loader = new THREE.TextureLoader();
+        const imagePath = type === 'cheap' ? 'public/images/cheaptent.png' : 'public/images/expensivetesnt.png';
+        
+        console.log(`Loading tent texture: ${imagePath}`);
+        
+        loader.load(
+            imagePath,
+            function(texture) {
+                console.log('Tent texture loaded successfully!');
+                const tentMaterial = new THREE.MeshLambertMaterial({ 
+                    map: texture,
+                    transparent: true
+                });
+                
+                tentMesh = new THREE.Mesh(tentGeometry, tentMaterial);
+                tentMesh.position.set(x, terrainHeight + 6, z);
+                tentMesh.castShadow = true;
+                tentMesh.receiveShadow = true;
+                scene.add(tentMesh);
+                console.log(`${type} tent created at position (${x}, ${z})`);
+            },
+            function(progress) {
+                console.log('Tent texture loading progress:', Math.round(progress.loaded / progress.total * 100) + '%');
+            },
+            function(error) {
+                console.log('Failed to load tent texture, using fallback color');
+                // Fallback to colored material
+                const tentColor = type === 'cheap' ? 0x8B4513 : 0x2E8B57; // Brown for cheap, green for expensive
+                const tentMaterial = new THREE.MeshLambertMaterial({ color: tentColor });
+                
+                tentMesh = new THREE.Mesh(tentGeometry, tentMaterial);
+                tentMesh.position.set(x, terrainHeight + 6, z);
+                tentMesh.castShadow = true;
+                tentMesh.receiveShadow = true;
+                scene.add(tentMesh);
+                console.log(`${type} tent created with fallback color at position (${x}, ${z})`);
+            }
+        );
+    }
+    
+    function removeTent3D() {
+        if (tentMesh && scene) {
+            scene.remove(tentMesh);
+            tentMesh = null;
+            tentType = null;
+            console.log('Tent removed from 3D world');
+        }
+    }
+    
+    function getTentType(tentName) {
+        if (tentName.toLowerCase().includes('cheap')) {
+            return 'cheap';
+        } else if (tentName.toLowerCase().includes('expensive')) {
+            return 'expensive';
+        }
+        return 'cheap'; // Default fallback
     }
     
     function createLandmarks() {
-        // ASDA building
-        const asdaGeometry = new THREE.BoxGeometry(20, 15, 30);
+        // ASDA building (moved to edge of map)
+        const asdaGeometry = new THREE.BoxGeometry(30, 20, 40);
         const asdaMaterial = new THREE.MeshLambertMaterial({ color: 0x00ff00 });
         const asda = new THREE.Mesh(asdaGeometry, asdaMaterial);
-        asda.position.set(-200, getTerrainHeight(-200, -200) + 7.5, -200);
+        asda.position.set(-600, getTerrainHeight(-600, -600) + 10, -600);
         asda.castShadow = true;
         scene.add(asda);
         
-        // Pony Farm
-        const farmGeometry = new THREE.BoxGeometry(15, 10, 20);
+        // Pony Farm (moved to edge of map)
+        const farmGeometry = new THREE.BoxGeometry(25, 15, 30);
         const farmMaterial = new THREE.MeshLambertMaterial({ color: 0x8B4513 });
         const farm = new THREE.Mesh(farmGeometry, farmMaterial);
-        farm.position.set(100, getTerrainHeight(100, 300) + 5, 300);
+        farm.position.set(400, getTerrainHeight(400, 600) + 7.5, 600);
         farm.castShadow = true;
         scene.add(farm);
+        
+        // Add a distinctive lone tree landmark
+        const loneTreeGeometry = new THREE.ConeGeometry(8, 25, 8);
+        const loneTreeMaterial = new THREE.MeshLambertMaterial({ color: 0x228B22 });
+        const loneTree = new THREE.Mesh(loneTreeGeometry, loneTreeMaterial);
+        loneTree.position.set(-400, getTerrainHeight(-400, -300) + 12, -300);
+        loneTree.castShadow = true;
+        scene.add(loneTree);
+        
+        // Add a distinctive rocky outcrop
+        for (let i = 0; i < 15; i++) {
+            const rockGeometry = new THREE.SphereGeometry(3 + Math.random() * 8, 6, 4);
+            const rockMaterial = new THREE.MeshLambertMaterial({ color: 0x555555 });
+            const rock = new THREE.Mesh(rockGeometry, rockMaterial);
+            rock.position.set(
+                500 + (Math.random() - 0.5) * 100,
+                getTerrainHeight(500, -400) + 5 + Math.random() * 10,
+                -400 + (Math.random() - 0.5) * 100
+            );
+            rock.scale.set(
+                0.5 + Math.random(),
+                0.5 + Math.random(),
+                0.5 + Math.random()
+            );
+            rock.castShadow = true;
+            scene.add(rock);
+        }
     }
     
     function getTerrainHeight(x, z) {
-        // Simple height calculation - in a real implementation you'd query the terrain mesh
+        // Match the terrain generation algorithm used in createTerrain()
         let height = 0;
-        height += Math.sin(x * 0.01) * 20 + Math.cos(z * 0.01) * 15;
         
-        if (x > 150 && x < 250 && z > -200 && z < -100) {
-            height += Math.sin(x * 0.02) * 30 + Math.cos(z * 0.02) * 25;
+        // Large rolling hills (primary terrain features)
+        height += Math.sin(x * 0.003) * 50 + Math.cos(z * 0.003) * 40;
+        height += Math.sin(x * 0.002 + z * 0.002) * 30;
+        
+        // Medium undulations (secondary features)
+        height += Math.sin(x * 0.008) * 15 + Math.cos(z * 0.008) * 12;
+        height += Math.sin(x * 0.015 + z * 0.01) * 8;
+        
+        // Fine detail for moorland texture
+        height += Math.sin(x * 0.05) * 3 + Math.cos(z * 0.05) * 2;
+        
+        // Create river valley - lower terrain along river path
+        const riverX = -200;
+        const riverDistanceFromCenter = Math.abs(x - riverX);
+        if (riverDistanceFromCenter < 150) {
+            const riverDepth = (150 - riverDistanceFromCenter) / 150;
+            height -= riverDepth * riverDepth * 25; // Gradual valley
         }
         
-        if (x > -150 && x < -50 && z > 150 && z < 250) {
-            height -= 20;
-        }
-        
-        if (x > 200 && x < 300 && z > -230 && z < -130) {
-            height += Math.random() * 40 - 20;
+        // Create waterfall cliff area
+        if (x > -300 && x < -200 && z > 100 && z < 200) {
+            height += Math.sin((x + 300) * 0.02) * 60; // Sharp cliff face
         }
         
         return height;
@@ -412,16 +946,28 @@ document.addEventListener('DOMContentLoaded', () => {
         }
         
         try {
-            // Update player 3D position
+            // Update player 3D position (invisible in first-person)
+            const terrainHeight = getTerrainHeight(gameState.player.x, gameState.player.y);
             player3D.position.x = gameState.player.x;
-            player3D.position.z = gameState.player.y; // Note: game Y becomes world Z
-            player3D.position.y = getTerrainHeight(gameState.player.x, gameState.player.y) + 5;
+            player3D.position.z = gameState.player.y;
+            player3D.position.y = terrainHeight + 5; // Always 5 units above terrain
             
-            // Update camera to follow player (third-person view)
-            const cameraOffset = new THREE.Vector3(0, 30, 50);
-            const targetPosition = player3D.position.clone().add(cameraOffset);
-            camera.position.lerp(targetPosition, 0.1);
-            camera.lookAt(player3D.position);
+            // Update player 3D rotation to match player facing direction
+            player3D.rotation.y = gameState.player.rotation;
+            
+            // Update first-person camera
+            updateFirstPersonCamera();
+            
+            // Update companion AI and position
+            updateCompanion();
+            
+            // Animate waterfall
+            if (waterfallMesh && waterfallMesh.material && waterfallMesh.material.map) {
+                waterfallMesh.material.map.offset.y += 0.01; // Flowing animation
+                if (waterfallMesh.material.map.offset.y > 1) {
+                    waterfallMesh.material.map.offset.y = 0;
+                }
+            }
             
             // Update lighting based on time of day
             updateWorldLighting();
@@ -440,6 +986,89 @@ document.addEventListener('DOMContentLoaded', () => {
             
         } catch (error) {
             console.error("Error updating 3D world:", error);
+        }
+    }
+    
+    function updateFirstPersonCamera() {
+        // Get terrain height at player position
+        const terrainHeight = getTerrainHeight(gameState.player.x, gameState.player.y);
+        const minHeight = terrainHeight + 3; // Minimum 3 units above terrain
+        const eyeHeight = terrainHeight + 8; // Eye level at 8 units above terrain
+        
+        // Set camera position to player position at eye level
+        camera.position.x = gameState.player.x;
+        camera.position.z = gameState.player.y;
+        camera.position.y = Math.max(minHeight, eyeHeight); // Ensure we're always above terrain
+        
+        // Apply rotation from mouse movement AND player rotation
+        camera.rotation.order = 'YXZ';
+        camera.rotation.y = cameraRotationY + gameState.player.rotation; // Combine mouse look with player rotation
+        camera.rotation.x = cameraRotationX;
+    }
+    
+    function updateCompanion() {
+        if (!companion3D || !gameState.companion) return;
+        
+        const deltaTime = 1/60; // Approximate frame time
+        companionWanderTimer += deltaTime;
+        
+        const playerPos = { x: gameState.player.x, z: gameState.player.y };
+        const companionPos = { x: companion3D.position.x, z: companion3D.position.z };
+        
+        // Distance to player
+        const distanceToPlayer = Math.sqrt(
+            Math.pow(playerPos.x - companionPos.x, 2) + 
+            Math.pow(playerPos.z - companionPos.z, 2)
+        );
+        
+        // Companion AI behavior
+        if (distanceToPlayer > 50) {
+            // Too far from player - move directly toward player
+            companionTarget.x = playerPos.x + (Math.random() - 0.5) * 20;
+            companionTarget.z = playerPos.z + (Math.random() - 0.5) * 20;
+        } else if (distanceToPlayer < 10) {
+            // Too close to player - move away slightly
+            const angle = Math.atan2(companionPos.z - playerPos.z, companionPos.x - playerPos.x);
+            companionTarget.x = playerPos.x + Math.cos(angle) * 15;
+            companionTarget.z = playerPos.z + Math.sin(angle) * 15;
+        } else if (companionWanderTimer > 3) {
+            // Wander around near player
+            const angle = Math.random() * Math.PI * 2;
+            const radius = 15 + Math.random() * 20;
+            companionTarget.x = playerPos.x + Math.cos(angle) * radius;
+            companionTarget.z = playerPos.z + Math.sin(angle) * radius;
+            companionWanderTimer = 0;
+        }
+        
+        // Move companion toward target
+        const targetDistance = Math.sqrt(
+            Math.pow(companionTarget.x - companionPos.x, 2) + 
+            Math.pow(companionTarget.z - companionPos.z, 2)
+        );
+        
+        if (targetDistance > 2) {
+            const moveSpeed = Math.min(30 * deltaTime, targetDistance);
+            const moveAngle = Math.atan2(companionTarget.z - companionPos.z, companionTarget.x - companionPos.x);
+            
+            companion3D.position.x += Math.cos(moveAngle) * moveSpeed;
+            companion3D.position.z += Math.sin(moveAngle) * moveSpeed;
+        }
+        
+        // Update companion height to follow terrain
+        companion3D.position.y = getTerrainHeight(companion3D.position.x, companion3D.position.z) + 10;
+        
+        // Make companion always face the camera (billboard effect)
+        if (companion3D && companion3D.geometry && companion3D.geometry.type === 'PlaneGeometry') {
+            companion3D.lookAt(camera.position);
+        }
+        
+        // For sprite materials, handle rotation differently
+        if (companion3D && companion3D.material && companion3D.material.type === 'SpriteMaterial') {
+            // Sprites automatically face camera, but we can adjust rotation
+            const angleToPlayer = Math.atan2(playerPos.z - companionPos.z, playerPos.x - companionPos.x);
+            if (Math.random() < 0.01) { // Occasionally face player
+                companion3D.material.rotation = -angleToPlayer + Math.PI/2;
+            }
         }
     }
     
@@ -672,7 +1301,21 @@ document.addEventListener('DOMContentLoaded', () => {
         COMPANIONS.forEach(name => {
             const card = document.createElement('div');
             card.className = 'character-card';
-            card.innerHTML = `<div class="character-image" style="width:100px; height:100px; background: #ccc; margin: auto;"></div><p>${name}</p>`; // Placeholder for child's drawing
+            
+            // Handle special case for Sophie with capital S, others are lowercase
+            let imageName = name.toLowerCase();
+            if (name === 'Sophie') {
+                imageName = 'Sophie'; // Keep capital S for Sophie.png
+            }
+            const imagePath = `public/images/companions/${imageName}.png`;
+            
+            card.innerHTML = `
+                <img src="${imagePath}" alt="${name}" class="companion-image" 
+                     onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';">
+                <div class="character-image-fallback" style="display:none;">No Image</div>
+                <p>${name}</p>
+            `;
+            
             card.onclick = () => {
                 gameState.companion = name;
                 switchScreen('doctor');
@@ -685,7 +1328,19 @@ document.addEventListener('DOMContentLoaded', () => {
         DOCTORS.forEach(name => {
             const card = document.createElement('div');
             card.className = 'character-card';
-            card.innerHTML = `<div class="character-image" style="width:100px; height:100px; background: #aaa; margin: auto;"></div><p>${name}</p>`; // Placeholder for adult drawing
+            
+            // Convert doctor name to filename (lowercase and handle spaces)
+            const imageName = name.toLowerCase();
+            const imagePath = `public/images/doctors/${imageName}.png`;
+            
+            card.innerHTML = `
+                <img src="${imagePath}" alt="${name}" class="doctor-image" 
+                     onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';"
+                     style="width:100px; height:100px; object-fit: cover; border-radius: 8px;">
+                <div class="character-image-fallback" style="display:none; width:100px; height:100px; background: #aaa; margin: auto; display: flex; align-items: center; justify-content: center; border-radius: 8px; color: white; font-size: 12px;">No Image</div>
+                <p>${name}</p>
+            `;
+            
             card.onclick = () => {
                 gameState.doctor = name;
                 switchScreen('shop');
@@ -695,17 +1350,24 @@ document.addEventListener('DOMContentLoaded', () => {
 
         // Shop Screen
         setupInitialShop();
+        console.log('🛒 Setting up exit shop button handler...');
+        console.log('exitShopButton element:', exitShopButton);
         exitShopButton.onclick = () => {
+            console.log('Exit shop button clicked!', { basketLength: shoppingBasket.length, budget: gameState.budget });
             if (shoppingBasket.length > 0) {
                 const total = getBasketTotal();
+                console.log('Basket has items, total:', total);
                 if (total <= gameState.budget) {
+                    console.log('Can afford items, purchasing...');
                     if (purchaseBasketItems()) {
+                        console.log('Purchase successful, starting game...');
                         startGame();
                     }
                 } else {
                     showNotification(`Not enough money! Need £${(total - gameState.budget).toFixed(2)} more.`);
                 }
             } else {
+                console.log('Basket empty, starting game directly...');
                 startGame();
             }
         };
@@ -842,13 +1504,35 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // --- MAIN GAME LOGIC ---
     function startGame() {
+        console.log('startGame() called');
+        console.log('Current screen:', gameState.currentScreen);
+        console.log('Scene exists:', !!scene);
+        console.log('Companion exists:', !!companion3D, 'gameState.companion:', gameState.companion);
+        
         switchScreen('game');
+        console.log('Switched to game screen');
+        
         if (!window.no3DGraphics && !scene) {
+            console.log('Initializing 3D world...');
             init3DWorld();
+        } else if (!window.no3DGraphics && !companion3D && gameState.companion) {
+            // Create companion if not already created
+            console.log('Creating companion...');
+            createCompanion3D();
         }
+        
+        // Restore tent if it was pitched
+        if (!window.no3DGraphics && gameState.world.tentPitched && gameState.world.tentLocation) {
+            const tentTypeToUse = gameState.world.tentType || 'cheap'; // Use saved type or default
+            console.log('Restoring tent...');
+            createTent3D(gameState.world.tentLocation.x, gameState.world.tentLocation.y, tentTypeToUse);
+        }
+        
         if (!gameLoop.running) {
-             gameLoop.start();
+            console.log('Starting game loop...');
+            gameLoop.start();
         }
+        console.log('startGame() completed');
     }
 
     const gameLoop = {
@@ -880,6 +1564,9 @@ document.addEventListener('DOMContentLoaded', () => {
     const keysPressed = {};
     let mouseX = 0, mouseY = 0;
     let isMouseDown = false;
+    let cameraRotationY = 0;
+    let cameraRotationX = 0;
+    let pointerLockCooldown = 0; // Prevent rapid pointer lock requests
     
     document.addEventListener('keydown', (e) => { 
         keysPressed[e.key.toLowerCase()] = true; 
@@ -890,12 +1577,30 @@ document.addEventListener('DOMContentLoaded', () => {
     });
     document.addEventListener('keyup', (e) => { keysPressed[e.key.toLowerCase()] = false; });
     
-    // Mouse controls for camera
+    // Mouse controls for first-person camera
     document.addEventListener('mousedown', (e) => {
         if (gameState.currentScreen === 'game') {
             isMouseDown = true;
             mouseX = e.clientX;
             mouseY = e.clientY;
+            
+            // Request pointer lock with cooldown to prevent rapid requests
+            const canvas = document.getElementById('three-canvas');
+            const now = Date.now();
+            if (canvas && canvas.requestPointerLock && gameState.currentScreen === 'game' && now > pointerLockCooldown) {
+                pointerLockCooldown = now + 1000; // 1 second cooldown
+                
+                // Add a small delay to ensure the game screen is fully loaded
+                setTimeout(() => {
+                    if (gameState.currentScreen === 'game' && !document.pointerLockElement) {
+                        canvas.requestPointerLock().catch(err => {
+                            // Handle pointer lock errors gracefully
+                            console.log('Pointer lock request failed (this is normal):', err.message);
+                            // Continue without pointer lock - mouse controls will still work
+                        });
+                    }
+                }, 100);
+            }
         }
     });
     
@@ -903,21 +1608,46 @@ document.addEventListener('DOMContentLoaded', () => {
         isMouseDown = false;
     });
     
+    // Handle pointer lock mouse movement
     document.addEventListener('mousemove', (e) => {
-        if (isMouseDown && gameState.currentScreen === 'game') {
-            const deltaX = e.clientX - mouseX;
-            const deltaY = e.clientY - mouseY;
+        if (gameState.currentScreen === 'game') {
+            let deltaX, deltaY;
             
-            // Update camera rotation (you can modify this later for first-person view)
-            if (camera) {
-                // Simple orbit camera controls
-                camera.position.x += deltaX * 0.5;
-                camera.position.y -= deltaY * 0.5;
+            if (document.pointerLockElement) {
+                // Use movementX/Y when pointer is locked
+                deltaX = e.movementX || 0;
+                deltaY = e.movementY || 0;
+            } else if (isMouseDown) {
+                // Fall back to regular mouse tracking
+                deltaX = e.clientX - mouseX;
+                deltaY = e.clientY - mouseY;
+                mouseX = e.clientX;
+                mouseY = e.clientY;
+            } else {
+                return;
             }
             
-            mouseX = e.clientX;
-            mouseY = e.clientY;
+            // Update camera rotation for first-person view
+            cameraRotationY -= deltaX * 0.002;
+            cameraRotationX -= deltaY * 0.002;
+            
+            // Limit vertical rotation
+            cameraRotationX = Math.max(-Math.PI/2, Math.min(Math.PI/2, cameraRotationX));
         }
+    });
+    
+    // Handle pointer lock changes
+    document.addEventListener('pointerlockchange', () => {
+        if (!document.pointerLockElement) {
+            isMouseDown = false;
+        }
+    });
+    
+    // Handle pointer lock errors
+    document.addEventListener('pointerlockerror', (e) => {
+        console.log('Pointer lock error occurred:', e);
+        isMouseDown = false;
+        // Continue without pointer lock - the game will still work with regular mouse controls
     });
     
     function updatePlayerState(deltaTime) {
@@ -928,22 +1658,30 @@ document.addEventListener('DOMContentLoaded', () => {
         const prevX = gameState.player.x;
         const prevY = gameState.player.y;
         
-        // Movement with WASD or arrow keys
+        // Rotation controls (left/right keys)
+        const rotationSpeed = 2.0; // radians per second
+        if (keysPressed['arrowleft'] || keysPressed['a']) {
+            gameState.player.rotation -= rotationSpeed * deltaTime;
+        }
+        if (keysPressed['arrowright'] || keysPressed['d']) {
+            gameState.player.rotation += rotationSpeed * deltaTime;
+        }
+        
+        // Keep rotation in 0-2π range
+        gameState.player.rotation = ((gameState.player.rotation % (Math.PI * 2)) + (Math.PI * 2)) % (Math.PI * 2);
+        
+        // Forward/backward movement based on player rotation
         let moved = false;
-        if (keysPressed['arrowup'] || keysPressed['w']) { 
-            gameState.player.y -= currentSpeed * deltaTime * 60; 
+        if (keysPressed['arrowup'] || keysPressed['w']) {
+            // Move forward in the direction the player is facing
+            gameState.player.x += Math.sin(gameState.player.rotation) * currentSpeed * deltaTime * 60;
+            gameState.player.y -= Math.cos(gameState.player.rotation) * currentSpeed * deltaTime * 60;
             moved = true;
         }
-        if (keysPressed['arrowdown'] || keysPressed['s']) { 
-            gameState.player.y += currentSpeed * deltaTime * 60; 
-            moved = true;
-        }
-        if (keysPressed['arrowleft'] || keysPressed['a']) { 
-            gameState.player.x -= currentSpeed * deltaTime * 60; 
-            moved = true;
-        }
-        if (keysPressed['arrowright'] || keysPressed['d']) { 
-            gameState.player.x += currentSpeed * deltaTime * 60; 
+        if (keysPressed['arrowdown'] || keysPressed['s']) {
+            // Move backward (opposite to facing direction)
+            gameState.player.x -= Math.sin(gameState.player.rotation) * currentSpeed * deltaTime * 60;
+            gameState.player.y += Math.cos(gameState.player.rotation) * currentSpeed * deltaTime * 60;
             moved = true;
         }
 
@@ -954,24 +1692,28 @@ document.addEventListener('DOMContentLoaded', () => {
             if (currentHeight > prevHeight + 2) { // Going uphill
                 currentSpeed *= 0.7; // 30% slower going uphill
                 // Recalculate movement with reduced speed
-                if (keysPressed['arrowup'] || keysPressed['w']) { 
-                    gameState.player.y = prevY - (currentSpeed * deltaTime * 60); 
+                if (keysPressed['arrowup'] || keysPressed['w']) {
+                    // Recalculate forward movement with reduced speed
+                    gameState.player.x = prevX + Math.sin(gameState.player.rotation) * currentSpeed * deltaTime * 60;
+                    gameState.player.y = prevY - Math.cos(gameState.player.rotation) * currentSpeed * deltaTime * 60;
                 }
-                if (keysPressed['arrowdown'] || keysPressed['s']) { 
-                    gameState.player.y = prevY + (currentSpeed * deltaTime * 60); 
-                }
-                if (keysPressed['arrowleft'] || keysPressed['a']) { 
-                    gameState.player.x = prevX - (currentSpeed * deltaTime * 60); 
-                }
-                if (keysPressed['arrowright'] || keysPressed['d']) { 
-                    gameState.player.x = prevX + (currentSpeed * deltaTime * 60); 
+                if (keysPressed['arrowdown'] || keysPressed['s']) {
+                    // Recalculate backward movement with reduced speed
+                    gameState.player.x = prevX - Math.sin(gameState.player.rotation) * currentSpeed * deltaTime * 60;
+                    gameState.player.y = prevY + Math.cos(gameState.player.rotation) * currentSpeed * deltaTime * 60;
                 }
             }
         }
 
-        // Keep player within reasonable bounds
-        gameState.player.x = Math.max(-400, Math.min(400, gameState.player.x));
-        gameState.player.y = Math.max(-400, Math.min(400, gameState.player.y));
+        // Keep player within reasonable bounds (bigger map)
+        const maxBound = terrainSize * 0.45; // Stay within 45% of terrain size
+        gameState.player.x = Math.max(-maxBound, Math.min(maxBound, gameState.player.x));
+        gameState.player.y = Math.max(-maxBound, Math.min(maxBound, gameState.player.y));
+        
+        // IMPORTANT: Enforce terrain collision - prevent player from going below ground
+        const currentTerrainHeight = getTerrainHeight(gameState.player.x, gameState.player.y);
+        // The player position represents their feet, so we don't need to add height here
+        // The camera and 3D model will be positioned above this base position
 
         // Increase hunger
         const hungerIncrease = gameState.player.isRunning ? 0.05 : 0.02;
@@ -1059,11 +1801,15 @@ document.addEventListener('DOMContentLoaded', () => {
         // Update menu icons based on context
         const nearRiver = getDistanceTo('The River') < 50;
         const nearPonyFarm = getDistanceTo('Pony Farm') < 30;
-        const atTent = gameState.world.tentPitched && getDistanceToPoint(gameState.world.tentLocation) < 20;
+        const nearTent = gameState.world.tentPitched && getDistanceToPoint(gameState.world.tentLocation) < 30;
+        const hasTentInBag = gameState.inventory.some(item => item.name.includes('Tent'));
 
         menuIcons.fishing.classList.toggle('disabled', !nearRiver);
         menuIcons.pony.classList.toggle('disabled', !nearPonyFarm);
-        menuIcons.sleep.classList.toggle('disabled', !(atTent && timeOfDay === 'Evening'));
+        menuIcons.sleep.classList.toggle('disabled', !(nearTent && timeOfDay === 'Evening'));
+        
+        // Camp icon is enabled if: player has tent in bag OR player is near pitched tent
+        menuIcons.camp.classList.toggle('disabled', !(hasTentInBag || nearTent));
     }
     
     function getCurrentLocation() {
@@ -1091,19 +1837,24 @@ document.addEventListener('DOMContentLoaded', () => {
     }
     
     document.getElementById('return-to-shop').onclick = () => {
-        // Reset player state but keep inventory, badges etc.
+        // Reset player state and allow choosing new companion/doctor
         const prevState = { ...gameState };
         gameState = {
             ...defaultGameState,
-            companion: prevState.companion,
-            doctor: prevState.doctor,
-            budget: 100, // Extra budget
-            inventory: prevState.inventory,
-            badges: prevState.badges
+            // Don't keep companion and doctor - let player choose again
+            companion: null,
+            doctor: null,
+            budget: 100, // Extra budget for next attempt
+            inventory: prevState.inventory, // Keep collected items
+            badges: prevState.badges // Keep earned badges
         };
         modals.sentHome.style.display = 'none';
-        setupInitialShop();
-        switchScreen('shop');
+        
+        // Re-setup the screens to regenerate companion and doctor cards
+        setupScreens();
+        
+        // Go back to companion selection to allow choosing new companion and doctor
+        switchScreen('companion');
     };
 
     // --- MENU FUNCTIONALITY ---
@@ -1127,10 +1878,23 @@ document.addEventListener('DOMContentLoaded', () => {
             itemDiv.onclick = () => {
                 // Consume food
                 if (SHOP_ITEMS.find(shopItem => shopItem.name === item.name && shopItem.type === 'food')) {
-                    gameState.player.hunger = Math.max(0, gameState.player.hunger - 15); // Food reduces hunger
+                    // Different hunger values for individual food items (less efficient than recipes)
+                    const foodHungerValues = {
+                        'Bread': 12,
+                        'Cheese': 10, 
+                        'Ham': 15,
+                        'Ketchup': 5,
+                        'Chocolate': 8,
+                        'Carrot': 6,
+                        'Cucumber': 4,
+                        'Apple': 8
+                    };
+                    
+                    const hungerReduction = foodHungerValues[item.name] || 10;
+                    gameState.player.hunger = Math.max(0, gameState.player.hunger - hungerReduction);
                     gameState.inventory.splice(index, 1);
                     menuIcons.bag.onclick(); // Refresh bag view
-                    showNotification(`You ate the ${item.name}.`);
+                    showNotification(`You ate the ${item.name}. Hunger reduced by ${hungerReduction}.`);
                 }
             };
             bagContents.appendChild(itemDiv);
@@ -1166,21 +1930,51 @@ document.addEventListener('DOMContentLoaded', () => {
     
     menuIcons.camp.onclick = () => {
         const hasTent = gameState.inventory.some(item => item.name.includes('Tent'));
-        if (gameState.world.tentPitched) {
-            // Pack up tent
+        const nearTent = gameState.world.tentPitched && getDistanceToPoint(gameState.world.tentLocation) < 30;
+        
+        if (gameState.world.tentPitched && nearTent) {
+            // Pack up tent - player is near the pitched tent
             gameState.world.tentPitched = false;
-            gameState.inventory.push({name: 'Packed Tent'}); // Simplified
-            showNotification("Tent packed up.");
+            
+            // Determine which tent type to give back
+            const tentName = gameState.world.tentType === 'expensive' ? 'Expensive Tent' : 'Cheap Tent';
+            gameState.inventory.push({name: tentName});
+            
+            // Clear tent state
+            gameState.world.tentType = null;
+            
+            // Remove tent from 3D world
+            removeTent3D();
+            
+            showNotification("Tent packed up and put in your bag.");
+            
+        } else if (gameState.world.tentPitched && !nearTent) {
+            // Tent is pitched but player is not near it
+            const distance = Math.round(getDistanceToPoint(gameState.world.tentLocation));
+            showNotification(`Your tent is ${distance} meters away. Get closer to pack it up.`);
+            
         } else if (hasTent) {
-            // Pitch tent
+            // Pitch tent - player has a tent in inventory
+            const tentItem = gameState.inventory.find(item => item.name.includes('Tent'));
             const tentIndex = gameState.inventory.findIndex(item => item.name.includes('Tent'));
+            
+            // Remove tent from inventory
             gameState.inventory.splice(tentIndex, 1);
+            
+            // Set up tent state
+            const type = getTentType(tentItem.name);
             gameState.world.tentPitched = true;
             gameState.world.tentLocation = { x: gameState.player.x, y: gameState.player.y };
+            gameState.world.tentType = type;
+            
+            // Create 3D tent
+            createTent3D(gameState.player.x, gameState.player.y, type);
+            
             earnBadge("First Camp");
-            showNotification("Tent pitched.");
+            showNotification(`${tentItem.name} pitched at your location.`);
+            
         } else {
-            showNotification("You don't have a tent to pitch.");
+            showNotification("You don't have a tent to pitch. Buy one from ASDA!");
         }
     };
 
@@ -1246,6 +2040,70 @@ document.addEventListener('DOMContentLoaded', () => {
         openModal(modals.generic);
     };
     
+    menuIcons.recipes.onclick = () => {
+        genericModalTitle.textContent = "Recipe Book";
+        
+        // Get available ingredients from inventory
+        const availableIngredients = gameState.inventory
+            .filter(item => SHOP_ITEMS.find(shopItem => shopItem.name === item.name && shopItem.type === 'food'))
+            .map(item => item.name);
+        
+        // Check which recipes can be made
+        const availableRecipes = RECIPES.map(recipe => {
+            const canMake = recipe.ingredients.every(ingredient => 
+                availableIngredients.filter(item => item === ingredient).length >= 
+                recipe.ingredients.filter(ing => ing === ingredient).length
+            );
+            return { ...recipe, canMake };
+        });
+        
+        let content = '<div class="recipe-container">';
+        
+        if (availableIngredients.length === 0) {
+            content += '<p>You have no food ingredients to cook with. Visit ASDA to buy some food!</p>';
+        } else {
+            content += `<p>Available ingredients: ${availableIngredients.map(ing => FOOD_EMOJIS[ing] || '🍽️').join(' ')}</p>`;
+            content += '<div class="recipe-list">';
+            
+            availableRecipes.forEach((recipe, index) => {
+                const statusClass = recipe.canMake ? 'recipe-available' : 'recipe-unavailable';
+                const clickable = recipe.canMake ? 'onclick="cookRecipe(' + index + ')"' : '';
+                const cursor = recipe.canMake ? 'cursor: pointer;' : 'cursor: not-allowed; opacity: 0.5;';
+                
+                content += `
+                    <div class="recipe-item ${statusClass}" ${clickable} style="
+                        border: 1px solid #ccc; 
+                        margin: 10px 0; 
+                        padding: 15px; 
+                        border-radius: 8px; 
+                        background: ${recipe.canMake ? '#e8f5e8' : '#f5f5f5'};
+                        ${cursor}
+                    ">
+                        <div style="display: flex; justify-content: space-between; align-items: center;">
+                            <div>
+                                <h4 style="margin: 0 0 5px 0;">${recipe.emoji} ${recipe.name}</h4>
+                                <p style="margin: 0 0 5px 0; font-size: 14px;">${recipe.description}</p>
+                                <p style="margin: 0; font-size: 12px; color: #666;">
+                                    Ingredients: ${recipe.ingredients.map(ing => FOOD_EMOJIS[ing] || ing).join(' + ')}
+                                </p>
+                            </div>
+                            <div style="text-align: right;">
+                                <div style="font-weight: bold; color: #2e8b57;">-${recipe.hungerValue} hunger</div>
+                                ${recipe.canMake ? '<div style="color: #008000; font-size: 12px;">✓ Can make</div>' : '<div style="color: #999; font-size: 12px;">✗ Missing ingredients</div>'}
+                            </div>
+                        </div>
+                    </div>
+                `;
+            });
+            
+            content += '</div>';
+        }
+        
+        content += '</div>';
+        genericModalContent.innerHTML = content;
+        openModal(modals.generic);
+    };
+    
     // Placeholder for other mini-games
     menuIcons.fishing.onclick = () => { if (!menuIcons.fishing.classList.contains('disabled')) showNotification("Fishing mini-game would start here!"); };
 
@@ -1268,6 +2126,11 @@ document.addEventListener('DOMContentLoaded', () => {
             gameState.player.y = y;
         },
         getPlayerPosition: () => ({ x: gameState.player.x, y: gameState.player.y }),
+        getTerrainHeightAtPlayer: () => {
+            const height = getTerrainHeight(gameState.player.x, gameState.player.y);
+            console.log(`Player at (${gameState.player.x.toFixed(1)}, ${gameState.player.y.toFixed(1)}) - Terrain height: ${height.toFixed(1)}`);
+            return height;
+        },
         toggleWireframe: () => {
             if (terrain) {
                 terrain.material.wireframe = !terrain.material.wireframe;
@@ -1282,6 +2145,232 @@ document.addEventListener('DOMContentLoaded', () => {
     // Make shop functions global for onclick handlers
     window.removeFromBasket = removeFromBasket;
     
+    // Make recipe functions global
+    window.cookRecipe = (recipeIndex) => {
+        const recipe = RECIPES[recipeIndex];
+        if (!recipe) return;
+        
+        // Check if we have all required ingredients
+        const availableIngredients = gameState.inventory
+            .filter(item => SHOP_ITEMS.find(shopItem => shopItem.name === item.name && shopItem.type === 'food'))
+            .map(item => item.name);
+        
+        const canMake = recipe.ingredients.every(ingredient => 
+            availableIngredients.filter(item => item === ingredient).length >= 
+            recipe.ingredients.filter(ing => ing === ingredient).length
+        );
+        
+        if (!canMake) {
+            showNotification("You don't have all the required ingredients!");
+            return;
+        }
+        
+        // Remove ingredients from inventory
+        recipe.ingredients.forEach(ingredient => {
+            const index = gameState.inventory.findIndex(item => item.name === ingredient);
+            if (index !== -1) {
+                gameState.inventory.splice(index, 1);
+            }
+        });
+        
+        // Reduce hunger by recipe value
+        gameState.player.hunger = Math.max(0, gameState.player.hunger - recipe.hungerValue);
+        
+        // Show success message
+        showNotification(`You cooked and ate ${recipe.name}! Hunger reduced by ${recipe.hungerValue}.`);
+        
+        // Earn cooking badge
+        if (!gameState.badges.includes("Master Chef")) {
+            earnBadge("Master Chef");
+        }
+        
+        // Close modal and refresh recipe book
+        modals.generic.style.display = 'none';
+        setTimeout(() => menuIcons.recipes.onclick(), 100); // Reopen with updated ingredients
+    };
+    
+    // Player debug functions
+    window.playerDebug = {
+        showPosition: () => {
+            const terrainHeight = getTerrainHeight(gameState.player.x, gameState.player.y);
+            const rotationDegrees = (gameState.player.rotation * 180 / Math.PI).toFixed(1);
+            console.log(`Player Position: (${gameState.player.x.toFixed(1)}, ${gameState.player.y.toFixed(1)})`);
+            console.log(`Player Rotation: ${rotationDegrees}° (${gameState.player.rotation.toFixed(2)} radians)`);
+            console.log(`Terrain Height: ${terrainHeight.toFixed(1)}`);
+            console.log(`Camera Height: ${camera ? camera.position.y.toFixed(1) : 'No camera'}`);
+        },
+        addGroundMarker: () => {
+            if (!scene) return;
+            
+            // Remove existing marker
+            const existingMarker = scene.getObjectByName('playerGroundMarker');
+            if (existingMarker) scene.remove(existingMarker);
+            
+            // Add a small sphere at player's ground level
+            const markerGeometry = new THREE.SphereGeometry(2, 8, 6);
+            const markerMaterial = new THREE.MeshBasicMaterial({ color: 0xff0000 });
+            const marker = new THREE.Mesh(markerGeometry, markerMaterial);
+            
+            const terrainHeight = getTerrainHeight(gameState.player.x, gameState.player.y);
+            marker.position.set(gameState.player.x, terrainHeight + 2, gameState.player.y);
+            marker.name = 'playerGroundMarker';
+            scene.add(marker);
+            
+            console.log(`Red marker placed at terrain level: ${terrainHeight.toFixed(1)}`);
+        },
+        removeGroundMarker: () => {
+            if (!scene) return;
+            const marker = scene.getObjectByName('playerGroundMarker');
+            if (marker) {
+                scene.remove(marker);
+                console.log('Ground marker removed');
+            }
+        },
+        setRotation: (degrees) => {
+            gameState.player.rotation = degrees * Math.PI / 180;
+            console.log(`Player rotation set to ${degrees}°`);
+        },
+        faceNorth: () => playerDebug.setRotation(0),
+        faceEast: () => playerDebug.setRotation(90),
+        faceSouth: () => playerDebug.setRotation(180),
+        faceWest: () => playerDebug.setRotation(270)
+    };
+    
+    // Recipe debug tools
+    window.recipeDebug = {
+        addAllIngredients: () => {
+            const allIngredients = ['Bread', 'Cheese', 'Ham', 'Ketchup', 'Chocolate', 'Carrot', 'Cucumber', 'Apple'];
+            allIngredients.forEach(ingredient => {
+                gameState.inventory.push({name: ingredient});
+            });
+            console.log('Added all recipe ingredients to inventory');
+        },
+        listRecipes: () => {
+            console.log('Available Recipes:');
+            RECIPES.forEach((recipe, index) => {
+                console.log(`${index}: ${recipe.name} (${recipe.hungerValue} hunger) - ${recipe.ingredients.join(', ')}`);
+            });
+        },
+        cookRecipe: (index) => {
+            if (typeof cookRecipe === 'function') {
+                cookRecipe(index);
+            }
+        },
+        clearFood: () => {
+            gameState.inventory = gameState.inventory.filter(item => 
+                !SHOP_ITEMS.find(shopItem => shopItem.name === item.name && shopItem.type === 'food')
+            );
+            console.log('Cleared all food from inventory');
+        }
+    };
+    
+    // Companion development tools
+    window.companionDebug = {
+        getPosition: () => companion3D ? { 
+            x: companion3D.position.x, 
+            y: companion3D.position.y, 
+            z: companion3D.position.z 
+        } : null,
+        teleportCompanion: (x, z) => {
+            if (companion3D) {
+                companion3D.position.x = x;
+                companion3D.position.z = z;
+                companion3D.position.y = getTerrainHeight(x, z) + 10;
+                companionTarget.x = x;
+                companionTarget.z = z;
+            }
+        },
+        setCompanionScale: (scale) => {
+            if (companion3D) {
+                if (companion3D.scale) {
+                    companion3D.scale.set(scale, scale, 1);
+                } else if (companion3D.geometry) {
+                    companion3D.geometry.scale(scale, scale, 1);
+                }
+            }
+        },
+        resetCompanion: () => {
+            if (companion3D) {
+                scene.remove(companion3D);
+                companion3D = null;
+                createCompanion3D();
+            }
+        },
+        testTexture: (path) => {
+            const loader = new THREE.TextureLoader();
+            loader.load(
+                path,
+                texture => console.log('Texture loaded successfully:', path, texture),
+                progress => console.log('Loading progress:', progress),
+                error => console.error('Texture load failed:', path, error)
+            );
+        },
+        forceSprite: () => {
+            if (companion3D) {
+                scene.remove(companion3D);
+                companion3D = null;
+            }
+            createCompanionFallback();
+        },
+        listCompanionImages: () => {
+            const companions = ['Sally', 'Teresa', 'Josie', 'Alex', 'Charlotte', 'Erica', 'Marta', 'Sophie'];
+            companions.forEach(name => {
+                let imageName = name.toLowerCase();
+                if (name === 'Sophie') imageName = 'Sophie';
+                const path = `public/images/companions/${imageName}.png`;
+                console.log(`${name}: ${path}`);
+                companionDebug.testTexture(path);
+            });
+        }
+    };
+    
+    // Tent development tools
+    window.tentDebug = {
+        pitchTent: (type = 'cheap') => {
+            if (!gameState.world.tentPitched) {
+                gameState.world.tentPitched = true;
+                gameState.world.tentLocation = { x: gameState.player.x, y: gameState.player.y };
+                gameState.world.tentType = type;
+                createTent3D(gameState.player.x, gameState.player.y, type);
+                console.log(`${type} tent pitched at player location`);
+            } else {
+                console.log('Tent already pitched. Use tentDebug.packTent() first.');
+            }
+        },
+        packTent: () => {
+            if (gameState.world.tentPitched) {
+                gameState.world.tentPitched = false;
+                gameState.world.tentType = null;
+                removeTent3D();
+                console.log('Tent packed up');
+            } else {
+                console.log('No tent to pack');
+            }
+        },
+        moveTent: (x, z) => {
+            if (gameState.world.tentPitched) {
+                gameState.world.tentLocation = { x, y: z };
+                removeTent3D();
+                createTent3D(x, z, gameState.world.tentType || 'cheap');
+                console.log(`Tent moved to (${x}, ${z})`);
+            } else {
+                console.log('No tent pitched');
+            }
+        },
+        getTentInfo: () => {
+            if (gameState.world.tentPitched) {
+                console.log('Tent Status:', {
+                    pitched: gameState.world.tentPitched,
+                    location: gameState.world.tentLocation,
+                    type: gameState.world.tentType,
+                    distanceFromPlayer: getDistanceToPoint(gameState.world.tentLocation)
+                });
+            } else {
+                console.log('No tent pitched');
+            }
+        }
+    };
+    
     // Show development commands in console
     console.log("🎮 Game Development Tools Available:");
     console.log("gameDevTools.addHill(x, z, radius, height) - Add a hill");
@@ -1294,9 +2383,33 @@ document.addEventListener('DOMContentLoaded', () => {
     console.log("gameDevTools.getPlayerPosition() - Get current player position");
     console.log("gameDevTools.toggleWireframe() - Toggle terrain wireframe");
     console.log("Example: gameDevTools.addTree(100, 100, 25)");
+    console.log("🏕️ Tent Debug Tools:");
+    console.log("tentDebug.pitchTent('cheap') or tentDebug.pitchTent('expensive') - Pitch tent at player location");
+    console.log("tentDebug.packTent() - Pack up tent");
+    console.log("tentDebug.moveTent(x, z) - Move tent to coordinates");
+    console.log("tentDebug.getTentInfo() - Get tent status");
+    console.log("🔍 Player Debug Tools:");
+    console.log("playerDebug.showPosition() - Show player and terrain info");
+    console.log("playerDebug.addGroundMarker() - Add red sphere at terrain level");
+    console.log("playerDebug.removeGroundMarker() - Remove ground marker");
+    console.log("playerDebug.setRotation(degrees) - Set player rotation");
+    console.log("playerDebug.faceNorth() / faceEast() / faceSouth() / faceWest() - Face cardinal directions");
+    console.log("🍳 Recipe Debug Tools:");
+    console.log("recipeDebug.addAllIngredients() - Add all food ingredients to inventory");
+    console.log("recipeDebug.listRecipes() - List all available recipes");
+    console.log("recipeDebug.cookRecipe(index) - Cook recipe by index");
+    console.log("recipeDebug.clearFood() - Remove all food from inventory");
 
     // --- Start the game ---
+    console.log("🎮 About to call init()...");
     init();
+    console.log("✅ Game initialization completed successfully!");
+    
+    } catch (error) {
+        console.error("❌ Error during game initialization:", error);
+        console.error("Stack trace:", error.stack);
+        alert("Game failed to initialize. Check the console for details. Error: " + error.message);
+    }
     
     } // Close startGameInitialization function
     

@@ -50,12 +50,16 @@ body {
     font-size: 2vw;
 }
 #splash-screen .background-image {
-    /* TODO: Add 'background-image: url("path/to/tent-on-moor.png");' */
-    width: 300px;
-    height: 200px;
-    background-color: #8C6E6E; /* Placeholder */
-    border: 2px solid var(--text-color);
+    background-image: url("public/images/splashscreenimage.png");
+    background-size: cover;
+    background-position: center;
+    background-repeat: no-repeat;
+    width: 400px;
+    height: 300px;
+    border: 3px solid var(--text-color);
+    border-radius: 12px;
     margin-top: 20px;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.3);
 }
 
 
@@ -68,20 +72,82 @@ body {
 }
 .character-card {
     border: 2px solid var(--accent-color);
-    padding: 10px;
+    padding: 15px;
     cursor: pointer;
-    transition: transform 0.2s;
+    transition: transform 0.2s, background-color 0.2s;
     background-color: var(--ui-background);
+    border-radius: 8px;
+    text-align: center;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    min-height: 140px;
 }
 .character-card:hover {
-    transform: scale(1.1);
+    transform: scale(1.05);
     background-color: var(--accent-color);
+}
+.character-card p {
+    margin: 8px 0 0 0;
+    font-weight: bold;
+    color: var(--text-color);
 }
 .character-card img {
     width: 100px;
     height: 100px;
     background-color: #ccc; /* Placeholder for child's drawing */
     margin-bottom: 5px;
+}
+
+/* --- Companion Images --- */
+.companion-image {
+    width: 100px;
+    height: 100px;
+    object-fit: contain;
+    margin: auto;
+    margin-bottom: 5px;
+    border-radius: 8px;
+    background: transparent;
+    image-rendering: -webkit-optimize-contrast;
+    image-rendering: crisp-edges;
+    /* Preserve PNG transparency */
+    mix-blend-mode: normal;
+    /* Smooth edges for better quality */
+    -webkit-backface-visibility: hidden;
+    backface-visibility: hidden;
+}
+
+/* --- Doctor Images --- */
+.doctor-image {
+    width: 100px;
+    height: 100px;
+    object-fit: contain;
+    margin: auto;
+    margin-bottom: 5px;
+    border-radius: 8px;
+    background: transparent;
+    image-rendering: -webkit-optimize-contrast;
+    image-rendering: crisp-edges;
+    /* Preserve PNG transparency */
+    mix-blend-mode: normal;
+    /* Smooth edges for better quality */
+    -webkit-backface-visibility: hidden;
+    backface-visibility: hidden;
+}
+
+.character-image-fallback {
+    width: 100px;
+    height: 100px;
+    background-color: #ccc;
+    margin: auto;
+    margin-bottom: 5px;
+    border-radius: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #666;
+    font-size: 12px;
+    text-align: center;
 }
 
 /* --- Shop Screen --- */
@@ -397,4 +463,40 @@ button {
     padding: 15px;
     text-align: center;
     z-index: 1000;
+}
+
+/* --- Recipe Book Styles --- */
+.recipe-container {
+    max-height: 60vh;
+    overflow-y: auto;
+    padding: 10px;
+}
+
+.recipe-list {
+    margin-top: 15px;
+}
+
+.recipe-item {
+    transition: transform 0.2s, box-shadow 0.2s;
+}
+
+.recipe-item.recipe-available:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+}
+
+.recipe-item h4 {
+    color: #2c3e50;
+}
+
+.recipe-item p {
+    color: #555;
+}
+
+.recipe-available {
+    border-color: #28a745 !important;
+}
+
+.recipe-unavailable {
+    border-color: #ccc !important;
 }
