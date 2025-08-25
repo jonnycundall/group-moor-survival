@@ -358,7 +358,7 @@ document.addEventListener('DOMContentLoaded', () => {
             
             // Fine detail for moorland texture
             height += Math.sin(x * 0.05) * 3 + Math.cos(z * 0.05) * 2;
-            height += (Math.random() - 0.5) * 4; // Random variation
+            // Remove random variation to ensure getTerrainHeight() matches actual terrain
             
             // Create river valley - lower terrain along river path
             const riverX = -200;
@@ -900,7 +900,12 @@ document.addEventListener('DOMContentLoaded', () => {
     }
     
     function getTerrainHeight(x, z) {
-        // Match the terrain generation algorithm used in createTerrain()
+        // For more accurate positioning, sample the actual terrain mesh if available
+        if (terrain && terrain.geometry) {
+            return sampleTerrainMesh(x, z);
+        }
+        
+        // Fallback to mathematical calculation (match createTerrain() exactly)
         let height = 0;
         
         // Large rolling hills (primary terrain features)
@@ -928,6 +933,45 @@ document.addEventListener('DOMContentLoaded', () => {
         }
         
         return height;
+    }
+    
+    function sampleTerrainMesh(x, z) {
+        // Get the actual height from the terrain mesh by sampling the vertices
+        const geometry = terrain.geometry;
+        const vertices = geometry.attributes.position.array;
+        const width = terrainDetail;
+        const height = terrainDetail;
+        
+        // Convert world coordinates to terrain grid coordinates
+        const halfSize = terrainSize / 2;
+        const gridX = ((x + halfSize) / terrainSize) * (width - 1);
+        const gridZ = ((z + halfSize) / terrainSize) * (height - 1);
+        
+        // Clamp to terrain bounds
+        const clampedX = Math.max(0, Math.min(width - 1, gridX));
+        const clampedZ = Math.max(0, Math.min(height - 1, gridZ));
+        
+        // Get the four surrounding vertices for bilinear interpolation
+        const x1 = Math.floor(clampedX);
+        const x2 = Math.min(width - 1, Math.ceil(clampedX));
+        const z1 = Math.floor(clampedZ);
+        const z2 = Math.min(height - 1, Math.ceil(clampedZ));
+        
+        // Get vertex heights (y-coordinate is at index 2)
+        const h1 = vertices[(z1 * width + x1) * 3 + 2]; // Bottom-left
+        const h2 = vertices[(z1 * width + x2) * 3 + 2]; // Bottom-right  
+        const h3 = vertices[(z2 * width + x1) * 3 + 2]; // Top-left
+        const h4 = vertices[(z2 * width + x2) * 3 + 2]; // Top-right
+        
+        // Bilinear interpolation
+        const fx = clampedX - x1;
+        const fz = clampedZ - z1;
+        
+        const h12 = h1 * (1 - fx) + h2 * fx; // Interpolate along x for bottom edge
+        const h34 = h3 * (1 - fx) + h4 * fx; // Interpolate along x for top edge
+        const finalHeight = h12 * (1 - fz) + h34 * fz; // Interpolate along z
+        
+        return finalHeight;
     }
     
     function update3DWorld() {
@@ -2191,8 +2235,61 @@ document.addEventListener('DOMContentLoaded', () => {
         faceNorth: () => playerDebug.setRotation(0),
         faceEast: () => playerDebug.setRotation(90),
         faceSouth: () => playerDebug.setRotation(180),
-        faceWest: () => playerDebug.setRotation(270)
+        faceWest: () => playerDebug.setRotation(270),
+        testTerrainHeight: () => {
+            // Test terrain height sampling vs calculation at multiple points
+            const testPoints = [
+                [0, 0], [100, 100], [-100, -100], [200, -200], [-300, 300],
+                [gameState.player.x, gameState.player.y]
+            ];
+            
+            console.log('Testing terrain height calculations:');
+            testPoints.forEach(([x, z], i) => {
+                // Force mathematical calculation
+                const mathHeight = calculateTerrainHeightMath(x, z);
+                // Use mesh sampling if available
+                const meshHeight = terrain ? sampleTerrainMesh(x, z) : 'No mesh';
+                const currentGetHeight = getTerrainHeight(x, z);
+                
+                console.log(`Point ${i + 1} (${x}, ${z}):`);
+                console.log(`  Math: ${mathHeight.toFixed(2)}`);
+                console.log(`  Mesh: ${typeof meshHeight === 'number' ? meshHeight.toFixed(2) : meshHeight}`);
+                console.log(`  Current getTerrainHeight: ${currentGetHeight.toFixed(2)}`);
+                console.log(`  Difference: ${typeof meshHeight === 'number' ? Math.abs(mathHeight - meshHeight).toFixed(2) : 'N/A'}`);
+            });
+        }
     };
+    
+    // Helper function for pure mathematical terrain height calculation
+    function calculateTerrainHeightMath(x, z) {
+        let height = 0;
+        
+        // Large rolling hills (primary terrain features)
+        height += Math.sin(x * 0.003) * 50 + Math.cos(z * 0.003) * 40;
+        height += Math.sin(x * 0.002 + z * 0.002) * 30;
+        
+        // Medium undulations (secondary features)
+        height += Math.sin(x * 0.008) * 15 + Math.cos(z * 0.008) * 12;
+        height += Math.sin(x * 0.015 + z * 0.01) * 8;
+        
+        // Fine detail for moorland texture
+        height += Math.sin(x * 0.05) * 3 + Math.cos(z * 0.05) * 2;
+        
+        // Create river valley - lower terrain along river path
+        const riverX = -200;
+        const riverDistanceFromCenter = Math.abs(x - riverX);
+        if (riverDistanceFromCenter < 150) {
+            const riverDepth = (150 - riverDistanceFromCenter) / 150;
+            height -= riverDepth * riverDepth * 25; // Gradual valley
+        }
+        
+        // Create waterfall cliff area
+        if (x > -300 && x < -200 && z > 100 && z < 200) {
+            height += Math.sin((x + 300) * 0.02) * 60; // Sharp cliff face
+        }
+        
+        return height;
+    }
     
     // Recipe debug tools
     window.recipeDebug = {
@@ -2352,6 +2449,7 @@ document.addEventListener('DOMContentLoaded', () => {
     console.log("playerDebug.removeGroundMarker() - Remove ground marker");
     console.log("playerDebug.setRotation(degrees) - Set player rotation");
     console.log("playerDebug.faceNorth() / faceEast() / faceSouth() / faceWest() - Face cardinal directions");
+    console.log("playerDebug.testTerrainHeight() - Compare mathematical vs mesh terrain height calculations");
     console.log("🍳 Recipe Debug Tools:");
     console.log("recipeDebug.addAllIngredients() - Add all food ingredients to inventory");
     console.log("recipeDebug.listRecipes() - List all available recipes");
