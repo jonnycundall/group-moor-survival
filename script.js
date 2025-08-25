@@ -1808,7 +1808,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
         menuIcons.fishing.classList.toggle('disabled', !nearRiver);
         menuIcons.pony.classList.toggle('disabled', !nearPonyFarm);
-        menuIcons.sleep.classList.toggle('disabled', !(nearTent && timeOfDay === 'Evening'));
+        menuIcons.sleep.classList.toggle('disabled', !(nearTent && timeOfDay === 'Evening' || timeOfDay === 'Night'));
         
         // Camp icon is enabled if: player has tent in bag OR player is near pitched tent
         menuIcons.camp.classList.toggle('disabled', !(hasTentInBag || nearTent));
