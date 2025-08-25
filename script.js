@@ -1000,10 +1000,10 @@ document.addEventListener('DOMContentLoaded', () => {
         camera.position.z = gameState.player.y;
         camera.position.y = Math.max(minHeight, eyeHeight); // Ensure we're always above terrain
         
-        // Apply rotation from mouse movement AND player rotation
+        // Apply rotation from player rotation only (no mouse look)
         camera.rotation.order = 'YXZ';
-        camera.rotation.y = cameraRotationY + gameState.player.rotation; // Combine mouse look with player rotation
-        camera.rotation.x = cameraRotationX;
+        camera.rotation.y = -gameState.player.rotation; // Negate to match movement coordinate system
+        camera.rotation.x = 0; // No vertical rotation
     }
     
     function updateCompanion() {
@@ -1579,75 +1579,27 @@ document.addEventListener('DOMContentLoaded', () => {
     
     // Mouse controls for first-person camera
     document.addEventListener('mousedown', (e) => {
-        if (gameState.currentScreen === 'game') {
-            isMouseDown = true;
-            mouseX = e.clientX;
-            mouseY = e.clientY;
-            
-            // Request pointer lock with cooldown to prevent rapid requests
-            const canvas = document.getElementById('three-canvas');
-            const now = Date.now();
-            if (canvas && canvas.requestPointerLock && gameState.currentScreen === 'game' && now > pointerLockCooldown) {
-                pointerLockCooldown = now + 1000; // 1 second cooldown
-                
-                // Add a small delay to ensure the game screen is fully loaded
-                setTimeout(() => {
-                    if (gameState.currentScreen === 'game' && !document.pointerLockElement) {
-                        canvas.requestPointerLock().catch(err => {
-                            // Handle pointer lock errors gracefully
-                            console.log('Pointer lock request failed (this is normal):', err.message);
-                            // Continue without pointer lock - mouse controls will still work
-                        });
-                    }
-                }, 100);
-            }
-        }
+        // Remove mouse look functionality - keep cursor visible at all times
+        // No pointer lock or mouse controls needed
     });
     
     document.addEventListener('mouseup', () => {
-        isMouseDown = false;
+        // No mouse controls needed
     });
     
-    // Handle pointer lock mouse movement
+    // Handle mouse movement - disabled for keyboard-only controls
     document.addEventListener('mousemove', (e) => {
-        if (gameState.currentScreen === 'game') {
-            let deltaX, deltaY;
-            
-            if (document.pointerLockElement) {
-                // Use movementX/Y when pointer is locked
-                deltaX = e.movementX || 0;
-                deltaY = e.movementY || 0;
-            } else if (isMouseDown) {
-                // Fall back to regular mouse tracking
-                deltaX = e.clientX - mouseX;
-                deltaY = e.clientY - mouseY;
-                mouseX = e.clientX;
-                mouseY = e.clientY;
-            } else {
-                return;
-            }
-            
-            // Update camera rotation for first-person view
-            cameraRotationY -= deltaX * 0.002;
-            cameraRotationX -= deltaY * 0.002;
-            
-            // Limit vertical rotation
-            cameraRotationX = Math.max(-Math.PI/2, Math.min(Math.PI/2, cameraRotationX));
-        }
+        // No mouse look - keep cursor visible and no camera rotation from mouse
     });
     
-    // Handle pointer lock changes
+    // Pointer lock handlers - disabled for keyboard-only controls
     document.addEventListener('pointerlockchange', () => {
-        if (!document.pointerLockElement) {
-            isMouseDown = false;
-        }
+        // No pointer lock needed
     });
     
-    // Handle pointer lock errors
+    // Handle pointer lock errors - disabled
     document.addEventListener('pointerlockerror', (e) => {
-        console.log('Pointer lock error occurred:', e);
-        isMouseDown = false;
-        // Continue without pointer lock - the game will still work with regular mouse controls
+        // No pointer lock needed
     });
     
     function updatePlayerState(deltaTime) {
@@ -1670,18 +1622,24 @@ document.addEventListener('DOMContentLoaded', () => {
         // Keep rotation in 0-2π range
         gameState.player.rotation = ((gameState.player.rotation % (Math.PI * 2)) + (Math.PI * 2)) % (Math.PI * 2);
         
-        // Forward/backward movement based on player rotation
+        // Forward/backward movement based on player rotation only
         let moved = false;
         if (keysPressed['arrowup'] || keysPressed['w']) {
             // Move forward in the direction the player is facing
-            gameState.player.x += Math.sin(gameState.player.rotation) * currentSpeed * deltaTime * 60;
-            gameState.player.y -= Math.cos(gameState.player.rotation) * currentSpeed * deltaTime * 60;
+            const moveX = Math.sin(gameState.player.rotation) * currentSpeed * deltaTime * 60;
+            const moveY = -Math.cos(gameState.player.rotation) * currentSpeed * deltaTime * 60;
+            
+            gameState.player.x += moveX;
+            gameState.player.y += moveY;
             moved = true;
         }
         if (keysPressed['arrowdown'] || keysPressed['s']) {
             // Move backward (opposite to facing direction)
-            gameState.player.x -= Math.sin(gameState.player.rotation) * currentSpeed * deltaTime * 60;
-            gameState.player.y += Math.cos(gameState.player.rotation) * currentSpeed * deltaTime * 60;
+            const moveX = -Math.sin(gameState.player.rotation) * currentSpeed * deltaTime * 60;
+            const moveY = Math.cos(gameState.player.rotation) * currentSpeed * deltaTime * 60;
+            
+            gameState.player.x += moveX;
+            gameState.player.y += moveY;
             moved = true;
         }
 
@@ -1691,7 +1649,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const prevHeight = getTerrainHeight(prevX, prevY);
             if (currentHeight > prevHeight + 2) { // Going uphill
                 currentSpeed *= 0.7; // 30% slower going uphill
-                // Recalculate movement with reduced speed
+                // Recalculate movement with reduced speed using player rotation
                 if (keysPressed['arrowup'] || keysPressed['w']) {
                     // Recalculate forward movement with reduced speed
                     gameState.player.x = prevX + Math.sin(gameState.player.rotation) * currentSpeed * deltaTime * 60;
