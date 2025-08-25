@@ -113,7 +113,14 @@ document.addEventListener('DOMContentLoaded', () => {
         recipes: document.getElementById('menu-recipes'),
         phone: document.getElementById('menu-phone'),
         badges: document.getElementById('menu-badges'),
+        minimap: document.getElementById('menu-minimap'),
     };
+
+    // Minimap Elements
+    const minimap = document.getElementById('minimap');
+    const minimapCanvas = document.getElementById('minimap-canvas');
+    const minimapClose = document.getElementById('minimap-close');
+    const minimapCtx = minimapCanvas ? minimapCanvas.getContext('2d') : null;
 
     // Modals
     const modals = {
@@ -1801,7 +1808,7 @@ document.addEventListener('DOMContentLoaded', () => {
         locationNameDisplay.textContent = playerLocation.name;
         
         // Update menu icons based on context
-        const nearRiver = getDistanceTo('The River') < 50;
+        const nearRiver = getDistanceTo('The River Valley') < 50;
         const nearPonyFarm = getDistanceTo('Pony Farm') < 30;
         const nearTent = gameState.world.tentPitched && getDistanceToPoint(gameState.world.tentLocation) < 30;
         const hasTentInBag = gameState.inventory.some(item => item.name.includes('Tent'));
@@ -1812,6 +1819,11 @@ document.addEventListener('DOMContentLoaded', () => {
         
         // Camp icon is enabled if: player has tent in bag OR player is near pitched tent
         menuIcons.camp.classList.toggle('disabled', !(hasTentInBag || nearTent));
+        
+        // Update minimap if visible
+        if (minimap && minimap.classList.contains('visible')) {
+            updateMinimap();
+        }
     }
     
     function getCurrentLocation() {
@@ -2009,6 +2021,17 @@ document.addEventListener('DOMContentLoaded', () => {
          openModal(modals.generic);
     };
 
+    menuIcons.minimap.onclick = () => {
+        toggleMinimap();
+    };
+
+    // Minimap close button
+    if (minimapClose) {
+        minimapClose.onclick = () => {
+            hideMinimap();
+        };
+    }
+
     menuIcons.phone.onclick = () => {
         genericModalTitle.textContent = "Smartphone";
         const content = `
@@ -2112,6 +2135,213 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // And so on for all other menu items...
 
+    // --- MINIMAP FUNCTIONALITY ---
+    function toggleMinimap() {
+        if (minimap.classList.contains('visible')) {
+            hideMinimap();
+        } else {
+            showMinimap();
+        }
+    }
+
+    function showMinimap() {
+        if (!minimap || !minimapCtx) return;
+        
+        minimap.classList.add('visible');
+        updateMinimap();
+    }
+
+    function hideMinimap() {
+        if (!minimap) return;
+        minimap.classList.remove('visible');
+    }
+
+    function updateMinimap() {
+        if (!minimapCtx || !minimap.classList.contains('visible')) return;
+
+        const canvas = minimapCanvas;
+        const ctx = minimapCtx;
+        const mapSize = 200;
+        const worldSize = terrainSize;
+        const scale = mapSize / worldSize;
+
+        // Clear canvas
+        ctx.clearRect(0, 0, mapSize, mapSize);
+
+        // Background
+        ctx.fillStyle = '#1a4c36'; // Dark green for moorland
+        ctx.fillRect(0, 0, mapSize, mapSize);
+
+        // Add terrain features
+        drawTerrainFeatures(ctx, scale, mapSize);
+
+        // Draw world locations
+        drawWorldLocations(ctx, scale, mapSize);
+
+        // Draw tent if pitched
+        if (gameState.world.tentPitched && gameState.world.tentLocation) {
+            drawTent(ctx, scale, mapSize);
+        }
+
+        // Draw player (always last to be on top)
+        drawPlayer(ctx, scale, mapSize);
+    }
+
+    function drawTerrainFeatures(ctx, scale, mapSize) {
+        const centerX = mapSize / 2;
+        const centerY = mapSize / 2;
+
+        // River valley
+        ctx.strokeStyle = '#4a90e2';
+        ctx.lineWidth = 3;
+        ctx.beginPath();
+        const riverX = centerX + (-200 * scale);
+        ctx.moveTo(riverX, 0);
+        ctx.lineTo(riverX, mapSize);
+        ctx.stroke();
+
+        // Waterfall area
+        ctx.fillStyle = '#6bb6ff';
+        const waterfallX = centerX + (-250 * scale);
+        const waterfallY = centerY + (150 * scale);
+        ctx.beginPath();
+        ctx.arc(waterfallX, waterfallY, 8, 0, Math.PI * 2);
+        ctx.fill();
+    }
+
+    function drawWorldLocations(ctx, scale, mapSize) {
+        const centerX = mapSize / 2;
+        const centerY = mapSize / 2;
+
+        WORLD_LOCATIONS.forEach(location => {
+            const x = centerX + (location.x * scale);
+            const y = centerY + (location.y * scale);
+
+            // Skip "The Moors" as it's the whole area
+            if (location.name === "The Moors") return;
+
+            // Different colors for different location types
+            let color = '#ffeb3b'; // Default yellow
+            let size = 4;
+            let symbol = '';
+
+            switch (location.name) {
+                case "ASDA":
+                    color = '#f44336'; // Red for shop
+                    size = 6;
+                    symbol = '🏪';
+                    break;
+                case "Pony Farm":
+                    color = '#4caf50'; // Green for farm
+                    size = 5;
+                    symbol = '🐴';
+                    break;
+                case "The River Valley":
+                    color = '#2196f3'; // Blue for river
+                    size = 4;
+                    symbol = '💧';
+                    break;
+                case "The Waterfall":
+                    color = '#00bcd4'; // Cyan for waterfall
+                    size = 4;
+                    symbol = '🌊';
+                    break;
+                case "The Ancient Stone Circle":
+                    color = '#9e9e9e'; // Grey for stones
+                    size = 4;
+                    symbol = '🗿';
+                    break;
+                default:
+                    color = '#ff9800'; // Orange for other locations
+                    size = 3;
+                    break;
+            }
+
+            // Draw location dot
+            ctx.fillStyle = color;
+            ctx.beginPath();
+            ctx.arc(x, y, size, 0, Math.PI * 2);
+            ctx.fill();
+
+            // Draw location border
+            ctx.strokeStyle = '#ffffff';
+            ctx.lineWidth = 1;
+            ctx.stroke();
+
+            // Draw symbol if available (simplified for canvas)
+            if (symbol) {
+                ctx.fillStyle = '#ffffff';
+                ctx.font = '10px Arial';
+                ctx.textAlign = 'center';
+                ctx.fillText(symbol.charAt(0), x, y + 3);
+            }
+        });
+    }
+
+    function drawTent(ctx, scale, mapSize) {
+        const centerX = mapSize / 2;
+        const centerY = mapSize / 2;
+        
+        const tentX = centerX + (gameState.world.tentLocation.x * scale);
+        const tentY = centerY + (gameState.world.tentLocation.y * scale);
+
+        // Draw tent as a triangle
+        ctx.fillStyle = gameState.world.tentType === 'expensive' ? '#ff6b35' : '#8bc34a';
+        ctx.strokeStyle = '#ffffff';
+        ctx.lineWidth = 1;
+        
+        ctx.beginPath();
+        ctx.moveTo(tentX, tentY - 4);
+        ctx.lineTo(tentX - 4, tentY + 3);
+        ctx.lineTo(tentX + 4, tentY + 3);
+        ctx.closePath();
+        ctx.fill();
+        ctx.stroke();
+
+        // Add tent symbol
+        ctx.fillStyle = '#ffffff';
+        ctx.font = '8px Arial';
+        ctx.textAlign = 'center';
+        ctx.fillText('⛺', tentX, tentY + 1);
+    }
+
+    function drawPlayer(ctx, scale, mapSize) {
+        const centerX = mapSize / 2;
+        const centerY = mapSize / 2;
+        
+        const playerX = centerX + (gameState.player.x * scale);
+        const playerY = centerY + (gameState.player.y * scale);
+
+        // Draw player as a circle with direction indicator
+        ctx.fillStyle = '#ff4444';
+        ctx.strokeStyle = '#ffffff';
+        ctx.lineWidth = 2;
+        
+        // Player circle
+        ctx.beginPath();
+        ctx.arc(playerX, playerY, 5, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.stroke();
+
+        // Direction indicator
+        const directionLength = 8;
+        const endX = playerX + Math.sin(gameState.player.rotation) * directionLength;
+        const endY = playerY - Math.cos(gameState.player.rotation) * directionLength;
+        
+        ctx.strokeStyle = '#ffffff';
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.moveTo(playerX, playerY);
+        ctx.lineTo(endX, endY);
+        ctx.stroke();
+
+        // Player label
+        ctx.fillStyle = '#ffffff';
+        ctx.font = '10px Arial';
+        ctx.textAlign = 'center';
+        ctx.fillText('YOU', playerX, playerY - 10);
+    }
+
     // --- DEVELOPMENT/DEBUG FUNCTIONS ---
     // Make these available globally for console access
     window.gameDevTools = {
@@ -2146,6 +2376,12 @@ document.addEventListener('DOMContentLoaded', () => {
     
     // Make shop functions global for onclick handlers
     window.removeFromBasket = removeFromBasket;
+    
+    // Make minimap functions global
+    window.toggleMinimap = toggleMinimap;
+    window.showMinimap = showMinimap;
+    window.hideMinimap = hideMinimap;
+    window.updateMinimap = updateMinimap;
     
     // Make recipe functions global
     window.cookRecipe = (recipeIndex) => {
@@ -2455,6 +2691,10 @@ document.addEventListener('DOMContentLoaded', () => {
     console.log("recipeDebug.listRecipes() - List all available recipes");
     console.log("recipeDebug.cookRecipe(index) - Cook recipe by index");
     console.log("recipeDebug.clearFood() - Remove all food from inventory");
+    console.log("🗺️ Minimap Tools:");
+    console.log("toggleMinimap() - Show/hide minimap");
+    console.log("showMinimap() - Show minimap");
+    console.log("hideMinimap() - Hide minimap");
 
     // --- Start the game ---
     console.log("🎮 About to call init()...");
