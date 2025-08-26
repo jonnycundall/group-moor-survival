@@ -308,6 +308,9 @@ document.addEventListener('DOMContentLoaded', () => {
     let waterfallMesh = null;
     let tentMesh = null;
     let tentType = null; // 'cheap' or 'expensive'
+    let skyDome = null;
+    let sun = null;
+    let clouds = [];
     
     function init3DWorld() {
         if (window.no3DGraphics) {
@@ -338,6 +341,7 @@ document.addEventListener('DOMContentLoaded', () => {
             renderer.setSize(window.innerWidth, window.innerHeight);
             renderer.shadowMap.enabled = true;
             renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+            renderer.autoClear = false; // We'll handle clearing manually with our sky dome
             console.log("Renderer created");
             
             // Add lights
@@ -382,13 +386,14 @@ document.addEventListener('DOMContentLoaded', () => {
             createLandmarks();
             console.log("Landmarks created");
             
+            // Create sky system
+            createSkySystem();
+            console.log("Sky system created");
+            
             // Handle window resize
             window.addEventListener('resize', onWindowResize, false);
             
             console.log("3D World initialization complete!");
-            
-            // Set initial sky color
-            renderer.setClearColor(0x87CEEB); // Day sky
             
             // Test render
             renderer.render(scene, camera);
@@ -439,9 +444,33 @@ document.addEventListener('DOMContentLoaded', () => {
                 height -= riverDepth * riverDepth * 25; // Gradual valley
             }
             
-            // Create waterfall cliff area
+            // Create waterfall cliff area with steep terrain
             if (x > -300 && x < -200 && z > 100 && z < 200) {
-                height += Math.sin((x + 300) * 0.02) * 60; // Sharp cliff face
+                // Create a steep cliff face for the waterfall
+                const cliffProgress = (x + 300) / 100; // 0 to 1 across the cliff
+                const waterfallCenterZ = 150;
+                const distanceFromWaterfallCenter = Math.abs(z - waterfallCenterZ);
+                
+                if (distanceFromWaterfallCenter < 50) {
+                    // Main waterfall area - very steep drop
+                    if (cliffProgress < 0.3) {
+                        // Top plateau
+                        height += 80;
+                    } else if (cliffProgress < 0.7) {
+                        // Steep cliff face - dramatic drop
+                        const dropProgress = (cliffProgress - 0.3) / 0.4;
+                        height += 80 - (dropProgress * dropProgress * 120); // Curved steep drop
+                        
+                        // Add rocky texture to cliff face
+                        height += Math.sin(x * 0.3) * Math.sin(z * 0.2) * 8;
+                    } else {
+                        // Bottom area - lower valley
+                        height -= 20;
+                    }
+                } else {
+                    // Surrounding cliff area - gentler slopes
+                    height += Math.sin((x + 300) * 0.02) * 40;
+                }
             }
             
             vertices[i + 2] = height;
@@ -661,83 +690,140 @@ document.addEventListener('DOMContentLoaded', () => {
         // Create the waterfall at the cliff face
         const waterfallX = -250;
         const waterfallZ = 150;
-        const waterfallHeight = 50;
+        const topHeight = getTerrainHeight(waterfallX - 30, waterfallZ); // Top of cliff
+        const bottomHeight = getTerrainHeight(waterfallX + 30, waterfallZ); // Bottom of cliff
+        const waterfallHeight = topHeight - bottomHeight + 20; // Add extra height for effect
         
-        // Waterfall effect using a plane with animated texture
-        const waterfallGeometry = new THREE.PlaneGeometry(15, waterfallHeight);
+        // Main waterfall cascade
+        const waterfallGeometry = new THREE.PlaneGeometry(20, waterfallHeight);
         
-        // Create animated water texture
+        // Create animated water texture with more detail
         const canvas = document.createElement('canvas');
-        canvas.width = 64;
-        canvas.height = 256;
+        canvas.width = 128;
+        canvas.height = 512;
         const context = canvas.getContext('2d');
         
-        // Create vertical flowing water pattern
-        const gradient = context.createLinearGradient(0, 0, 0, 256);
-        gradient.addColorStop(0, 'rgba(135, 206, 235, 0.9)'); // Sky blue
+        // Create vertical flowing water pattern with multiple streams
+        const gradient = context.createLinearGradient(0, 0, 0, 512);
+        gradient.addColorStop(0, 'rgba(245, 255, 255, 0.95)'); // Almost white at top
+        gradient.addColorStop(0.1, 'rgba(135, 206, 235, 0.9)'); // Sky blue
         gradient.addColorStop(0.3, 'rgba(255, 255, 255, 0.8)'); // White foam
-        gradient.addColorStop(0.6, 'rgba(70, 130, 180, 0.9)'); // Steel blue
-        gradient.addColorStop(1, 'rgba(25, 25, 112, 0.9)'); // Midnight blue
+        gradient.addColorStop(0.5, 'rgba(70, 130, 180, 0.85)'); // Steel blue
+        gradient.addColorStop(0.7, 'rgba(100, 149, 237, 0.9)'); // Cornflower blue
+        gradient.addColorStop(1, 'rgba(25, 25, 112, 0.9)'); // Midnight blue at bottom
         
         context.fillStyle = gradient;
-        context.fillRect(0, 0, 64, 256);
+        context.fillRect(0, 0, 128, 512);
         
-        // Add some flowing lines
-        context.strokeStyle = 'rgba(255, 255, 255, 0.6)';
-        context.lineWidth = 2;
-        for (let i = 0; i < 8; i++) {
+        // Add multiple flowing streams
+        context.strokeStyle = 'rgba(255, 255, 255, 0.7)';
+        context.lineWidth = 3;
+        for (let i = 0; i < 6; i++) {
             context.beginPath();
-            context.moveTo(10 + i * 6, 0);
-            context.lineTo(15 + i * 6, 256);
+            const x = 15 + i * 18;
+            context.moveTo(x, 0);
+            context.quadraticCurveTo(x + 5, 256, x - 3, 512);
             context.stroke();
         }
         
+        // Add mist/foam effects
+        context.fillStyle = 'rgba(255, 255, 255, 0.4)';
+        for (let i = 0; i < 20; i++) {
+            const x = Math.random() * 128;
+            const y = Math.random() * 512;
+            context.beginPath();
+            context.arc(x, y, Math.random() * 3 + 1, 0, Math.PI * 2);
+            context.fill();
+        }
+        
         const waterfallTexture = new THREE.CanvasTexture(canvas);
+        waterfallTexture.wrapS = THREE.RepeatWrapping;
+        waterfallTexture.wrapT = THREE.RepeatWrapping;
+        waterfallTexture.repeat.set(1, 2);
+        
         const waterfallMaterial = new THREE.MeshLambertMaterial({ 
             map: waterfallTexture,
             transparent: true, 
-            opacity: 0.9,
+            opacity: 0.85,
             side: THREE.DoubleSide
         });
         
         waterfallMesh = new THREE.Mesh(waterfallGeometry, waterfallMaterial);
         waterfallMesh.position.set(
             waterfallX,
-            getTerrainHeight(waterfallX, waterfallZ) + waterfallHeight / 2,
+            bottomHeight + waterfallHeight / 2,
             waterfallZ
         );
+        waterfallMesh.rotation.x = Math.PI * 0.05; // Slight angle for realism
         scene.add(waterfallMesh);
         
-        // Create waterfall pool at the bottom
-        const poolGeometry = new THREE.CircleGeometry(12, 16);
+        // Create secondary smaller cascade
+        const smallCascadeGeometry = new THREE.PlaneGeometry(8, waterfallHeight * 0.6);
+        const smallCascadeMaterial = waterfallMaterial.clone();
+        smallCascadeMaterial.opacity = 0.6;
+        
+        const smallCascade = new THREE.Mesh(smallCascadeGeometry, smallCascadeMaterial);
+        smallCascade.position.set(
+            waterfallX - 15,
+            bottomHeight + waterfallHeight * 0.4,
+            waterfallZ + 10
+        );
+        smallCascade.rotation.x = Math.PI * 0.08;
+        scene.add(smallCascade);
+        
+        // Create waterfall pool at the bottom with rocks
+        const poolGeometry = new THREE.CircleGeometry(18, 20);
         const poolMaterial = new THREE.MeshLambertMaterial({ 
             color: 0x4169E1, 
             transparent: true, 
-            opacity: 0.7 
+            opacity: 0.8 
         });
-        const pool = new THREE.Mesh(poolGeometry, poolMaterial);
-        pool.rotation.x = -Math.PI / 2;
-        pool.position.set(
-            waterfallX,
-            getTerrainHeight(waterfallX, waterfallZ) + 0.5,
-            waterfallZ
-        );
-        scene.add(pool);
+        const poolMesh = new THREE.Mesh(poolGeometry, poolMaterial);
+        poolMesh.rotation.x = -Math.PI / 2;
+        poolMesh.position.set(waterfallX + 10, bottomHeight + 1, waterfallZ);
+        scene.add(poolMesh);
         
-        // Add mist/spray effect around waterfall
-        const mistGeometry = new THREE.SphereGeometry(8, 8, 6);
-        const mistMaterial = new THREE.MeshLambertMaterial({ 
-            color: 0xFFFFFF, 
-            transparent: true, 
-            opacity: 0.3 
-        });
-        const mist = new THREE.Mesh(mistGeometry, mistMaterial);
-        mist.position.set(
-            waterfallX,
-            getTerrainHeight(waterfallX, waterfallZ) + 10,
-            waterfallZ
-        );
-        scene.add(mist);
+        // Add rocks around the pool and cliff
+        for (let i = 0; i < 15; i++) {
+            const rockGeometry = new THREE.BoxGeometry(
+                Math.random() * 8 + 3,
+                Math.random() * 6 + 2,
+                Math.random() * 8 + 3
+            );
+            const rockMaterial = new THREE.MeshLambertMaterial({ color: 0x696969 });
+            const rock = new THREE.Mesh(rockGeometry, rockMaterial);
+            
+            const angle = (i / 15) * Math.PI * 2;
+            const distance = 20 + Math.random() * 15;
+            rock.position.set(
+                waterfallX + 10 + Math.cos(angle) * distance,
+                bottomHeight + rock.geometry.parameters.height / 2,
+                waterfallZ + Math.sin(angle) * distance
+            );
+            rock.rotation.y = Math.random() * Math.PI * 2;
+            rock.rotation.z = (Math.random() - 0.5) * 0.3;
+            scene.add(rock);
+        }
+        
+        // Add cliff face rocks
+        for (let i = 0; i < 8; i++) {
+            const cliffRockGeometry = new THREE.BoxGeometry(
+                Math.random() * 12 + 5,
+                Math.random() * 15 + 8,
+                Math.random() * 10 + 4
+            );
+            const cliffRockMaterial = new THREE.MeshLambertMaterial({ color: 0x555555 });
+            const cliffRock = new THREE.Mesh(cliffRockGeometry, cliffRockMaterial);
+            
+            cliffRock.position.set(
+                waterfallX - 20 + Math.random() * 40,
+                topHeight - Math.random() * 20,
+                waterfallZ - 25 + Math.random() * 50
+            );
+            cliffRock.rotation.y = Math.random() * Math.PI * 2;
+            cliffRock.rotation.x = (Math.random() - 0.5) * 0.4;
+            scene.add(cliffRock);
+        }
     }
     
     function createPlayer3D() {
@@ -970,6 +1056,191 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
     
+    function createSkySystem() {
+        if (window.no3DGraphics || !scene) return;
+        
+        // Create sky dome
+        createSkyDome();
+        
+        // Create sun
+        createSun();
+        
+        // Create clouds
+        createClouds();
+    }
+    
+    function createSkyDome() {
+        // Create a large sphere for the sky
+        const skyGeometry = new THREE.SphereGeometry(5000, 32, 32);
+        
+        // Create gradient texture based on time of day
+        const canvas = document.createElement('canvas');
+        canvas.width = 256;
+        canvas.height = 256;
+        const ctx = canvas.getContext('2d');
+        
+        updateSkyGradient(ctx, canvas);
+        
+        const skyTexture = new THREE.CanvasTexture(canvas);
+        const skyMaterial = new THREE.MeshBasicMaterial({ 
+            map: skyTexture, 
+            side: THREE.BackSide // Render inside of sphere
+        });
+        
+        skyDome = new THREE.Mesh(skyGeometry, skyMaterial);
+        skyDome.name = 'skyDome';
+        scene.add(skyDome);
+    }
+    
+    function updateSkyGradient(ctx, canvas) {
+        const { hour } = gameState.time;
+        
+        // Create gradient based on time of day
+        const gradient = ctx.createLinearGradient(0, 0, 0, canvas.height);
+        
+        if (hour >= 6 && hour < 8) {
+            // Morning - soft sunrise colors
+            gradient.addColorStop(0, '#FFB347'); // Light orange
+            gradient.addColorStop(0.3, '#87CEEB'); // Sky blue
+            gradient.addColorStop(1, '#4682B4'); // Steel blue
+        } else if (hour >= 8 && hour < 18) {
+            // Day - clear blue sky
+            gradient.addColorStop(0, '#87CEEB'); // Sky blue
+            gradient.addColorStop(0.5, '#4682B4'); // Steel blue
+            gradient.addColorStop(1, '#1E90FF'); // Dodger blue
+        } else if (hour >= 18 && hour < 20) {
+            // Evening - sunset colors
+            gradient.addColorStop(0, '#FF6347'); // Tomato
+            gradient.addColorStop(0.3, '#FF7F50'); // Coral
+            gradient.addColorStop(0.6, '#4682B4'); // Steel blue
+            gradient.addColorStop(1, '#191970'); // Midnight blue
+        } else {
+            // Night - dark sky
+            gradient.addColorStop(0, '#191970'); // Midnight blue
+            gradient.addColorStop(0.5, '#000080'); // Navy
+            gradient.addColorStop(1, '#000000'); // Black
+        }
+        
+        ctx.fillStyle = gradient;
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+    }
+    
+    function createSun() {
+        const sunGeometry = new THREE.SphereGeometry(50, 16, 16);
+        const sunMaterial = new THREE.MeshBasicMaterial({ 
+            color: 0xFFFFAA,
+            emissive: 0xFFFF00,
+            emissiveIntensity: 0.3
+        });
+        
+        sun = new THREE.Mesh(sunGeometry, sunMaterial);
+        sun.name = 'sun';
+        scene.add(sun);
+        
+        updateSunPosition();
+    }
+    
+    function updateSunPosition() {
+        if (!sun) return;
+        
+        const { hour, minute } = gameState.time;
+        const timeOfDay = hour + minute / 60;
+        
+        // Sun visible from 6 AM to 6 PM
+        if (timeOfDay >= 6 && timeOfDay <= 18) {
+            sun.visible = true;
+            
+            // Calculate sun position - arc across the sky
+            const sunProgress = (timeOfDay - 6) / 12; // 0 to 1 from 6 AM to 6 PM
+            const angle = sunProgress * Math.PI; // 0 to PI radians
+            
+            // Position sun in an arc
+            const radius = 2000;
+            sun.position.x = Math.cos(angle + Math.PI) * radius; // Start east, end west
+            sun.position.y = Math.sin(angle) * radius + 300; // Arc height
+            sun.position.z = 0;
+        } else {
+            sun.visible = false; // Hide sun at night
+        }
+    }
+    
+    function createClouds() {
+        clouds = [];
+        const cloudCount = 15 + Math.random() * 10; // 15-25 clouds
+        
+        for (let i = 0; i < cloudCount; i++) {
+            const cloudGeometry = new THREE.SphereGeometry(30 + Math.random() * 40, 8, 8);
+            const cloudMaterial = new THREE.MeshBasicMaterial({ 
+                color: 0xFFFFFF,
+                opacity: 0.7,
+                transparent: true
+            });
+            
+            const cloud = new THREE.Mesh(cloudGeometry, cloudMaterial);
+            
+            // Random position in sky
+            cloud.position.x = (Math.random() - 0.5) * 4000;
+            cloud.position.y = 200 + Math.random() * 300;
+            cloud.position.z = (Math.random() - 0.5) * 4000;
+            
+            // Random scale
+            const scale = 0.5 + Math.random() * 1.5;
+            cloud.scale.set(scale, scale * 0.6, scale);
+            
+            // Store velocity for movement
+            cloud.userData = {
+                velocity: {
+                    x: (Math.random() - 0.5) * 0.2,
+                    z: (Math.random() - 0.5) * 0.2
+                }
+            };
+            
+            cloud.name = `cloud${i}`;
+            clouds.push(cloud);
+            scene.add(cloud);
+        }
+    }
+    
+    function updateClouds() {
+        if (!clouds.length) return;
+        
+        clouds.forEach(cloud => {
+            // Move clouds slowly
+            cloud.position.x += cloud.userData.velocity.x;
+            cloud.position.z += cloud.userData.velocity.z;
+            
+            // Wrap around world
+            if (cloud.position.x > 2000) cloud.position.x = -2000;
+            if (cloud.position.x < -2000) cloud.position.x = 2000;
+            if (cloud.position.z > 2000) cloud.position.z = -2000;
+            if (cloud.position.z < -2000) cloud.position.z = 2000;
+        });
+    }
+    
+    function updateSkySystem() {
+        if (window.no3DGraphics) return;
+        
+        // Update sun position
+        updateSunPosition();
+        
+        // Update clouds
+        updateClouds();
+        
+        // Update sky gradient every few seconds
+        if (frameCount % 180 === 0 && skyDome) { // Every 3 seconds at 60fps
+            const canvas = document.createElement('canvas');
+            canvas.width = 256;
+            canvas.height = 256;
+            const ctx = canvas.getContext('2d');
+            
+            updateSkyGradient(ctx, canvas);
+            
+            const skyTexture = new THREE.CanvasTexture(canvas);
+            skyDome.material.map = skyTexture;
+            skyDome.material.needsUpdate = true;
+        }
+    }
+    
     function getTerrainHeight(x, z) {
         // For more accurate positioning, sample the actual terrain mesh if available
         if (terrain && terrain.geometry) {
@@ -1079,16 +1350,31 @@ document.addEventListener('DOMContentLoaded', () => {
             // Update pony position if hired
             updatePony3D();
             
-            // Animate waterfall
+            // Animate waterfall with more realistic flow
             if (waterfallMesh && waterfallMesh.material && waterfallMesh.material.map) {
-                waterfallMesh.material.map.offset.y += 0.01; // Flowing animation
+                // Faster flow for more realistic effect
+                waterfallMesh.material.map.offset.y += 0.025; 
                 if (waterfallMesh.material.map.offset.y > 1) {
                     waterfallMesh.material.map.offset.y = 0;
+                }
+                
+                // Add slight horizontal movement for wind effect
+                waterfallMesh.material.map.offset.x = Math.sin(frameCount * 0.01) * 0.02;
+                
+                // Animate transparency for mist effect
+                if (waterfallMesh.material.opacity) {
+                    waterfallMesh.material.opacity = 0.8 + Math.sin(frameCount * 0.05) * 0.1;
                 }
             }
             
             // Update lighting based on time of day
             updateWorldLighting();
+            
+            // Update sky system
+            updateSkySystem();
+            
+            // Clear depth buffer but not color (sky dome handles background)
+            renderer.clear(false, true, false);
             
             // Render the scene
             renderer.render(scene, camera);
