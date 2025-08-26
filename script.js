@@ -144,6 +144,24 @@ document.addEventListener('DOMContentLoaded', () => {
         { name: 'Cheap Tent', price: 50, type: 'gear' }, { name: 'Expensive Tent', price: 150, type: 'gear' },
         { name: 'Cheap Fishing Rod', price: 20, type: 'gear' }, { name: 'Expensive Fishing Rod', price: 60, type: 'gear' },
     ];
+
+    // Asda supermarket items (includes same foods as regular shop plus extras)
+    const ASDA_ITEMS = [
+        // Same foods as regular shop
+        { name: 'Bread', price: 2, type: 'food' }, { name: 'Cheese', price: 4, type: 'food' },
+        { name: 'Ham', price: 5, type: 'food' }, { name: 'Ketchup', price: 3, type: 'food' },
+        { name: 'Chocolate', price: 2, type: 'food' }, { name: 'Carrot', price: 1, type: 'food' },
+        { name: 'Cucumber', price: 1, type: 'food' }, { name: 'Apple', price: 1, type: 'food' },
+        // Additional ASDA-specific items
+        { name: 'Ready Meal', price: 3, type: 'food' }, { name: 'Frozen Pizza', price: 4, type: 'food' },
+        { name: 'Energy Drink', price: 2, type: 'food' }, { name: 'Protein Bar', price: 3, type: 'food' },
+        { name: 'Instant Noodles', price: 1, type: 'food' }, { name: 'Canned Beans', price: 2, type: 'food' },
+        { name: 'Sandwich', price: 4, type: 'food' }, { name: 'Yogurt', price: 2, type: 'food' },
+        { name: 'Bananas', price: 1, type: 'food' }, { name: 'Orange Juice', price: 3, type: 'food' },
+        // ASDA gear items
+        { name: 'Camping Stove', price: 25, type: 'gear' }, { name: 'Sleeping Bag', price: 40, type: 'gear' },
+        { name: 'Flashlight', price: 15, type: 'gear' }, { name: 'Water Bottle', price: 8, type: 'gear' },
+    ];
     
     // Food emoji mapping
     const FOOD_EMOJIS = {
@@ -158,7 +176,18 @@ document.addEventListener('DOMContentLoaded', () => {
         'Trout': '🐟',
         'Salmon': '🍣',
         'Pike': '🐠',
-        'Perch': '🎣'
+        'Perch': '🎣',
+        // Asda items
+        'Ready Meal': '🍽️',
+        'Frozen Pizza': '🍕',
+        'Energy Drink': '⚡',
+        'Protein Bar': '🍫',
+        'Instant Noodles': '🍜',
+        'Canned Beans': '🥫',
+        'Sandwich': '🥪',
+        'Yogurt': '🥛',
+        'Bananas': '🍌',
+        'Orange Juice': '🧃'
     };
     
     // Pony hire system
@@ -1103,6 +1132,37 @@ document.addEventListener('DOMContentLoaded', () => {
     let insideCave = false;
     let caveInteriorObjects = [];
     
+    // Treasure hunt state
+    let treasureHunt = {
+        active: false,
+        currentClue: 0,
+        cluesFound: [],
+        treasureFound: false,
+        clueBoxes: [],
+        treasureChest: null
+    };
+    
+    const TREASURE_CLUES = [
+        {
+            id: 'cave_clue',
+            location: { x: 200, y: -500 }, // Cave
+            message: "🗝️ Ancient Cave Clue 🗝️\n\nSeek ye the Twisted Oak that stands alone,\nWhere gnarled branches reach toward the sky.\nIts shape unique upon the moor is known,\nBeneath its roots the next clue doth lie.\n\n(Look for an unusually shaped tree on the moorland)",
+            nextClue: 'tree_clue'
+        },
+        {
+            id: 'tree_clue',
+            location: { x: -150, y: 200 }, // Near a distinctive tree location
+            message: "🌳 The Twisted Oak's Secret 🌳\n\nWell done, seeker! Now heed this word:\nFind the Standing Stone that guards the west,\nWhere ancient peoples once were heard,\nAnd there your quest shall be blessed.\n\n(Seek a tall, distinctive rock formation)",
+            nextClue: 'rock_clue'
+        },
+        {
+            id: 'rock_clue',
+            location: { x: -350, y: -100 }, // Rocky area
+            message: "🗿 Stone Guardian's Riddle 🗿\n\nThe waters sing where willows bend,\nWhere fish do dance and currents flow.\nSeek the place where waters end\nIn a pool where secrets glow.\n\n(Find the quiet pool along the river)",
+            nextClue: 'treasure'
+        }
+    ];
+    
     function createCave() {
         const caveX = 200;
         const caveZ = -500;
@@ -1445,8 +1505,479 @@ document.addEventListener('DOMContentLoaded', () => {
         cavePool.position.set(caveX - 10, caveY - 15, caveZ - 25);
         scene.add(cavePool);
         caveInteriorObjects.push(cavePool);
+        
+        // Create the first treasure clue box in the cave
+        createTreasureClueBox('cave_clue', caveX + 8, caveY - 10, caveZ - 20);
     }
     
+    // Treasure Hunt System
+    function createTreasureClueBox(clueId, x, y, z) {
+        const clue = TREASURE_CLUES.find(c => c.id === clueId);
+        if (!clue) return;
+        
+        // Create ornate treasure box
+        const boxGeometry = new THREE.BoxGeometry(3, 2, 4);
+        const boxMaterial = new THREE.MeshLambertMaterial({ 
+            color: 0x8B4513, // Brown wood color
+            emissive: 0x2F1B14
+        });
+        const clueBox = new THREE.Mesh(boxGeometry, boxMaterial);
+        clueBox.position.set(x, y, z);
+        clueBox.name = `clueBox_${clueId}`;
+        clueBox.userData = { clueId: clueId, isClueBox: true };
+        
+        // Add golden trim/decoration
+        const trimGeometry = new THREE.BoxGeometry(3.2, 2.2, 4.2);
+        const trimMaterial = new THREE.MeshLambertMaterial({ 
+            color: 0xFFD700, // Gold color
+            emissive: 0x333300
+        });
+        const trim = new THREE.Mesh(trimGeometry, trimMaterial);
+        trim.position.copy(clueBox.position);
+        trim.position.y -= 0.05; // Slightly lower to act as base
+        scene.add(trim);
+        
+        scene.add(clueBox);
+        
+        // Add glowing effect
+        const glowLight = new THREE.PointLight(0xFFD700, 0.5, 15);
+        glowLight.position.copy(clueBox.position);
+        glowLight.position.y += 3;
+        scene.add(glowLight);
+        
+        // Store references
+        treasureHunt.clueBoxes.push({
+            box: clueBox,
+            trim: trim,
+            light: glowLight,
+            clueId: clueId
+        });
+        
+        if (clueId === 'cave_clue') {
+            caveInteriorObjects.push(clueBox, trim, glowLight);
+        }
+        
+        console.log(`Created treasure clue box for ${clueId} at (${x}, ${y}, ${z})`);
+    }
+    
+    function createTwistedTree() {
+        const treeX = -150;
+        const treeZ = 200;
+        const treeY = getTerrainHeight(treeX, treeZ);
+        
+        // Create twisted tree trunk
+        const trunkGeometry = new THREE.CylinderGeometry(2, 4, 20, 8);
+        const trunkMaterial = new THREE.MeshLambertMaterial({ color: 0x4A4A4A });
+        const trunk = new THREE.Mesh(trunkGeometry, trunkMaterial);
+        trunk.position.set(treeX, treeY + 10, treeZ);
+        trunk.rotation.z = Math.PI * 0.1; // Slight lean
+        trunk.castShadow = true;
+        scene.add(trunk);
+        
+        // Create twisted branches
+        for (let i = 0; i < 6; i++) {
+            const branchGeometry = new THREE.CylinderGeometry(0.5, 1.5, 12, 6);
+            const branchMaterial = new THREE.MeshLambertMaterial({ color: 0x3A3A3A });
+            const branch = new THREE.Mesh(branchGeometry, branchMaterial);
+            
+            const angle = (i / 6) * Math.PI * 2;
+            branch.position.set(
+                treeX + Math.cos(angle) * 3,
+                treeY + 15 + Math.sin(i) * 4,
+                treeZ + Math.sin(angle) * 3
+            );
+            branch.rotation.z = angle + Math.PI / 4;
+            branch.rotation.x = (Math.random() - 0.5) * 0.5;
+            branch.castShadow = true;
+            scene.add(branch);
+        }
+        
+        // Add some sparse foliage
+        for (let i = 0; i < 4; i++) {
+            const leafGeometry = new THREE.SphereGeometry(3, 6, 4);
+            const leafMaterial = new THREE.MeshLambertMaterial({ color: 0x228B22 });
+            const leaves = new THREE.Mesh(leafGeometry, leafMaterial);
+            
+            const angle = (i / 4) * Math.PI * 2;
+            leaves.position.set(
+                treeX + Math.cos(angle) * 5,
+                treeY + 18 + Math.random() * 4,
+                treeZ + Math.sin(angle) * 5
+            );
+            leaves.scale.set(0.7, 0.4, 0.7);
+            scene.add(leaves);
+        }
+    }
+    
+    function createStandingStone() {
+        const stoneX = -350;
+        const stoneZ = -100;
+        const stoneY = getTerrainHeight(stoneX, stoneZ);
+        
+        // Create tall standing stone
+        const stoneGeometry = new THREE.BoxGeometry(4, 25, 6);
+        const stoneMaterial = new THREE.MeshLambertMaterial({ color: 0x555555 });
+        const stone = new THREE.Mesh(stoneGeometry, stoneMaterial);
+        stone.position.set(stoneX, stoneY + 12.5, stoneZ);
+        stone.rotation.z = Math.PI * 0.05; // Slight tilt
+        stone.castShadow = true;
+        scene.add(stone);
+        
+        // Add smaller stones around it
+        for (let i = 0; i < 5; i++) {
+            const smallStoneGeometry = new THREE.BoxGeometry(
+                1 + Math.random() * 2,
+                2 + Math.random() * 4,
+                1 + Math.random() * 2
+            );
+            const smallStone = new THREE.Mesh(smallStoneGeometry, stoneMaterial);
+            
+            const angle = (i / 5) * Math.PI * 2;
+            const distance = 8 + Math.random() * 4;
+            smallStone.position.set(
+                stoneX + Math.cos(angle) * distance,
+                stoneY + smallStone.geometry.parameters.height / 2,
+                stoneZ + Math.sin(angle) * distance
+            );
+            smallStone.rotation.y = Math.random() * Math.PI * 2;
+            smallStone.castShadow = true;
+            scene.add(smallStone);
+        }
+    }
+    
+    function createTreasureChest() {
+        const chestX = -180;
+        const chestZ = 50; // Along the river
+        const chestY = getTerrainHeight(chestX, chestZ);
+        
+        // Create treasure chest - partially buried
+        const chestGeometry = new THREE.BoxGeometry(6, 4, 8);
+        const chestMaterial = new THREE.MeshLambertMaterial({ 
+            color: 0x8B4513, // Brown wood
+            emissive: 0x2F1B14
+        });
+        const chest = new THREE.Mesh(chestGeometry, chestMaterial);
+        chest.position.set(chestX, chestY - 1, chestZ); // Partially buried
+        chest.rotation.y = Math.PI * 0.2; // Slight angle
+        chest.name = 'treasureChest';
+        chest.userData = { isTreasureChest: true };
+        scene.add(chest);
+        
+        // Add golden bands and lock
+        const bandGeometry = new THREE.BoxGeometry(6.2, 0.5, 8.2);
+        const bandMaterial = new THREE.MeshLambertMaterial({ 
+            color: 0xFFD700, // Gold
+            emissive: 0x333300
+        });
+        
+        // Top band
+        const topBand = new THREE.Mesh(bandGeometry, bandMaterial);
+        topBand.position.copy(chest.position);
+        topBand.position.y += 1.5;
+        topBand.rotation.copy(chest.rotation);
+        scene.add(topBand);
+        
+        // Bottom band
+        const bottomBand = new THREE.Mesh(bandGeometry, bandMaterial);
+        bottomBand.position.copy(chest.position);
+        bottomBand.position.y -= 1.5;
+        bottomBand.rotation.copy(chest.rotation);
+        scene.add(bottomBand);
+        
+        // Lock
+        const lockGeometry = new THREE.BoxGeometry(1, 1.5, 1);
+        const lock = new THREE.Mesh(lockGeometry, bandMaterial);
+        lock.position.copy(chest.position);
+        lock.position.y += 0.5;
+        lock.position.x += 3; // Front of chest
+        lock.rotation.copy(chest.rotation);
+        scene.add(lock);
+        
+        // Add glowing effect
+        const chestLight = new THREE.PointLight(0xFFD700, 0.8, 25);
+        chestLight.position.copy(chest.position);
+        chestLight.position.y += 5;
+        scene.add(chestLight);
+        
+        // Store reference
+        treasureHunt.treasureChest = {
+            chest: chest,
+            bands: [topBand, bottomBand],
+            lock: lock,
+            light: chestLight
+        };
+        
+        console.log(`Created treasure chest at (${chestX}, ${chestY}, ${chestZ})`);
+    }
+    
+    function checkTreasureHuntInteraction() {
+        const playerX = gameState.player.x;
+        const playerZ = gameState.player.y;
+        
+        // Check for clue box interactions
+        treasureHunt.clueBoxes.forEach(clueBoxData => {
+            const box = clueBoxData.box;
+            const distance = Math.sqrt(
+                (playerX - box.position.x) * (playerX - box.position.x) + 
+                (playerZ - box.position.z) * (playerZ - box.position.z)
+            );
+            
+            if (distance < 8 && !treasureHunt.cluesFound.includes(clueBoxData.clueId)) {
+                showTreasureClueMessage(clueBoxData.clueId);
+            }
+        });
+        
+        // Check for treasure chest interaction
+        if (treasureHunt.treasureChest && !treasureHunt.treasureFound) {
+            const chest = treasureHunt.treasureChest.chest;
+            const distance = Math.sqrt(
+                (playerX - chest.position.x) * (playerX - chest.position.x) + 
+                (playerZ - chest.position.z) * (playerZ - chest.position.z)
+            );
+            
+            if (distance < 10) {
+                openTreasureChest();
+            }
+        }
+    }
+    
+    function showTreasureClueMessage(clueId) {
+        if (treasureHunt.cluesFound.includes(clueId)) return;
+        
+        const clue = TREASURE_CLUES.find(c => c.id === clueId);
+        if (!clue) return;
+        
+        treasureHunt.cluesFound.push(clueId);
+        
+        // Create clue message display
+        const messageDiv = document.createElement('div');
+        messageDiv.style.position = 'fixed';
+        messageDiv.style.top = '50%';
+        messageDiv.style.left = '50%';
+        messageDiv.style.transform = 'translate(-50%, -50%)';
+        messageDiv.style.background = 'rgba(139, 69, 19, 0.95)';
+        messageDiv.style.color = '#FFD700';
+        messageDiv.style.padding = '30px';
+        messageDiv.style.borderRadius = '15px';
+        messageDiv.style.fontSize = '18px';
+        messageDiv.style.textAlign = 'center';
+        messageDiv.style.zIndex = '1000';
+        messageDiv.style.border = '3px solid #FFD700';
+        messageDiv.style.boxShadow = '0 0 20px rgba(255, 215, 0, 0.5)';
+        messageDiv.style.fontFamily = 'serif';
+        messageDiv.style.maxWidth = '500px';
+        messageDiv.style.whiteSpace = 'pre-line';
+        
+        messageDiv.innerHTML = `${clue.message}\n\n<button onclick="this.parentElement.remove()" style="background: #FFD700; color: #8B4513; border: none; padding: 10px 20px; border-radius: 5px; font-size: 16px; cursor: pointer; margin-top: 15px;">Close</button>`;
+        
+        document.body.appendChild(messageDiv);
+        
+        // Spawn next clue or treasure
+        if (clue.nextClue && clue.nextClue !== 'treasure') {
+            spawnNextClue(clue.nextClue);
+        } else if (clue.nextClue === 'treasure') {
+            spawnTreasure();
+        }
+        
+        console.log(`Found treasure clue: ${clueId}`);
+    }
+    
+    function spawnNextClue(nextClueId) {
+        const clue = TREASURE_CLUES.find(c => c.id === nextClueId);
+        if (!clue) return;
+        
+        // Create the appropriate landmark for the clue
+        if (nextClueId === 'tree_clue') {
+            createTwistedTree();
+            setTimeout(() => {
+                createTreasureClueBox(nextClueId, -150, getTerrainHeight(-150, 200) + 2, 196);
+            }, 1000);
+        } else if (nextClueId === 'rock_clue') {
+            createStandingStone();
+            setTimeout(() => {
+                createTreasureClueBox(nextClueId, -350, getTerrainHeight(-350, -100) + 2, -104);
+            }, 1000);
+        }
+    }
+    
+    function spawnTreasure() {
+        setTimeout(() => {
+            createTreasureChest();
+        }, 1000);
+    }
+    
+    function openTreasureChest() {
+        if (treasureHunt.treasureFound) return;
+        
+        treasureHunt.treasureFound = true;
+        
+        // Add treasure to inventory
+        if (!gameState.player.inventory.treasure) {
+            gameState.player.inventory.treasure = [];
+        }
+        
+        const treasureItems = [
+            'Golden Crown',
+            'Ruby Brooch',
+            'Emerald Necklace',
+            'Diamond Ring',
+            'Silver Goblet',
+            'Pearl Earrings',
+            'Ancient Gold Coins',
+            'Sapphire Pendant'
+        ];
+        
+        treasureItems.forEach(item => {
+            gameState.player.inventory.treasure.push(item);
+        });
+        
+        // Create treasure found message
+        const messageDiv = document.createElement('div');
+        messageDiv.style.position = 'fixed';
+        messageDiv.style.top = '50%';
+        messageDiv.style.left = '50%';
+        messageDiv.style.transform = 'translate(-50%, -50%)';
+        messageDiv.style.background = 'rgba(255, 215, 0, 0.95)';
+        messageDiv.style.color = '#8B4513';
+        messageDiv.style.padding = '40px';
+        messageDiv.style.borderRadius = '20px';
+        messageDiv.style.fontSize = '20px';
+        messageDiv.style.textAlign = 'center';
+        messageDiv.style.zIndex = '1000';
+        messageDiv.style.border = '5px solid #8B4513';
+        messageDiv.style.boxShadow = '0 0 30px rgba(255, 215, 0, 0.8)';
+        messageDiv.style.fontFamily = 'serif';
+        messageDiv.style.maxWidth = '600px';
+        
+        messageDiv.innerHTML = `
+            <h2 style="margin-top: 0; color: #8B4513;">🏆 TREASURE FOUND! 🏆</h2>
+            <p>Congratulations, brave adventurer!</p>
+            <p>You have discovered the ancient treasure!</p>
+            <p><strong>Your treasure contains:</strong></p>
+            <ul style="text-align: left; margin: 20px 0;">
+                ${treasureItems.map(item => `<li>💎 ${item}</li>`).join('')}
+            </ul>
+            <p>The treasure hunt is complete!</p>
+            <button onclick="this.parentElement.remove()" style="background: #8B4513; color: #FFD700; border: none; padding: 15px 30px; border-radius: 10px; font-size: 18px; cursor: pointer; margin-top: 20px;">Celebrate!</button>
+        `;
+        
+        document.body.appendChild(messageDiv);
+        
+        console.log('Treasure hunt completed! Treasure found.');
+    }
+    
+    // ASDA Shop interaction function
+    function checkAsdaInteraction() {
+        const asdaLocation = WORLD_LOCATIONS.find(loc => loc.name === "ASDA");
+        if (!asdaLocation) return;
+        
+        const distance = Math.sqrt(
+            Math.pow(gameState.player.x - asdaLocation.x, 2) + 
+            Math.pow(gameState.player.y - asdaLocation.y, 2)
+        );
+        
+        // If player is close to ASDA (within interaction range)
+        if (distance < 40) {
+            // Show interaction prompt
+            if (!window.asdaPromptShown) {
+                showNotification("🛒 Press [Enter] to shop at ASDA");
+                window.asdaPromptShown = true;
+            }
+            
+            // Check for Enter key press
+            if (keysPressed['enter']) {
+                openAsdaShop();
+                keysPressed['enter'] = false; // Prevent repeated opening
+            }
+        } else {
+            window.asdaPromptShown = false;
+        }
+    }
+    
+    function openAsdaShop() {
+        // Create ASDA shop modal
+        const asdaModal = document.createElement('div');
+        asdaModal.style.position = 'fixed';
+        asdaModal.style.top = '0';
+        asdaModal.style.left = '0';
+        asdaModal.style.width = '100%';
+        asdaModal.style.height = '100%';
+        asdaModal.style.background = 'rgba(0, 0, 0, 0.8)';
+        asdaModal.style.display = 'flex';
+        asdaModal.style.justifyContent = 'center';
+        asdaModal.style.alignItems = 'center';
+        asdaModal.style.zIndex = '1000';
+        
+        const asdaContent = document.createElement('div');
+        asdaContent.style.background = '#00ff00';
+        asdaContent.style.padding = '30px';
+        asdaContent.style.borderRadius = '15px';
+        asdaContent.style.maxWidth = '600px';
+        asdaContent.style.maxHeight = '80%';
+        asdaContent.style.overflow = 'auto';
+        asdaContent.style.color = 'white';
+        
+        let asdaHTML = `
+            <h2 style="margin-top: 0; text-align: center; color: white;">🛒 ASDA Supermarket</h2>
+            <p style="text-align: center; margin-bottom: 20px;">Budget: £${gameState.budget.toFixed(2)}</p>
+            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 15px;">
+        `;
+        
+        ASDA_ITEMS.forEach((item, index) => {
+            const emoji = FOOD_EMOJIS[item.name] || (item.type === 'gear' ? '🔧' : '📦');
+            asdaHTML += `
+                <div style="background: white; color: black; padding: 15px; border-radius: 10px; text-align: center;">
+                    <div style="font-size: 24px; margin-bottom: 10px;">${emoji}</div>
+                    <h4 style="margin: 5px 0;">${item.name}</h4>
+                    <p style="margin: 5px 0; font-weight: bold;">£${item.price}</p>
+                    <button onclick="buyAsdaItem(${index})" style="background: #00aa00; color: white; border: none; padding: 8px 16px; border-radius: 5px; cursor: pointer;">Buy</button>
+                </div>
+            `;
+        });
+        
+        asdaHTML += `
+            </div>
+            <div style="text-align: center; margin-top: 20px;">
+                <button onclick="closeAsdaShop()" style="background: #ff6b6b; color: white; border: none; padding: 12px 24px; border-radius: 8px; cursor: pointer; font-size: 16px;">Close Shop</button>
+            </div>
+        `;
+        
+        asdaContent.innerHTML = asdaHTML;
+        asdaModal.appendChild(asdaContent);
+        document.body.appendChild(asdaModal);
+        
+        // Store reference for closing
+        window.currentAsdaModal = asdaModal;
+    }
+    
+    // Global functions for ASDA shop
+    window.buyAsdaItem = function(itemIndex) {
+        const item = ASDA_ITEMS[itemIndex];
+        
+        if (gameState.budget >= item.price) {
+            gameState.budget -= item.price;
+            gameState.inventory.push({name: item.name});
+            showNotification(`🛍️ Bought ${item.name} for £${item.price}!`);
+            
+            // Update budget display in the modal
+            if (window.currentAsdaModal) {
+                const budgetDisplay = window.currentAsdaModal.querySelector('p');
+                if (budgetDisplay) {
+                    budgetDisplay.textContent = `Budget: £${gameState.budget.toFixed(2)}`;
+                }
+            }
+        } else {
+            showNotification(`❌ Not enough money! Need £${(item.price - gameState.budget).toFixed(2)} more.`);
+        }
+    };
+    
+    window.closeAsdaShop = function() {
+        if (window.currentAsdaModal) {
+            window.currentAsdaModal.remove();
+            window.currentAsdaModal = null;
+        }
+    };
+
     function createSkySystem() {
         if (window.no3DGraphics || !scene) return;
         
@@ -1743,6 +2274,12 @@ document.addEventListener('DOMContentLoaded', () => {
             
             // Check cave entrance proximity
             checkCaveEntrance();
+            
+            // Check treasure hunt interactions
+            checkTreasureHuntInteraction();
+            
+            // Check ASDA shop interaction
+            checkAsdaInteraction();
             
             // Animate waterfall with more realistic flow
             if (waterfallMesh && waterfallMesh.material && waterfallMesh.material.map) {
@@ -2046,6 +2583,68 @@ document.addEventListener('DOMContentLoaded', () => {
         }
         gameState = { ...defaultGameState };
         return false;
+    }
+
+    function startNewGame() {
+        // Reset game state to defaults
+        gameState = { ...defaultGameState };
+        
+        // Clear any saved game data
+        document.cookie = 'groupMoorSurvival=; path=/; expires=Thu, 01 Jan 1970 00:00:01 GMT;';
+        
+        // Reset UI elements
+        shoppingBasket = [];
+        updateBasketDisplay();
+        
+        // Clear any modals
+        Object.values(modals).forEach(modal => {
+            if (modal) modal.style.display = 'none';
+        });
+        
+        // Hide minimap if visible
+        if (minimap && minimap.classList.contains('visible')) {
+            hideMinimap();
+        }
+        
+        // Reset 3D world if it exists
+        if (scene) {
+            // Clear all objects from scene
+            while(scene.children.length > 0) {
+                scene.remove(scene.children[0]);
+            }
+            
+            // Reset global 3D variables
+            player3D = null;
+            companion3D = null;
+            terrain = null;
+            waterfallMesh = null;
+            insideCave = false;
+            caveInteriorObjects = [];
+            caveEntrance = null;
+            
+            // Reset treasure hunt
+            treasureHunt = {
+                active: false,
+                currentClue: 0,
+                cluesFound: [],
+                treasureFound: false,
+                clueBoxes: [],
+                treasureChest: null
+            };
+        }
+        
+        // Reset world display
+        if (locationNameDisplay) {
+            locationNameDisplay.textContent = 'The Moors';
+        }
+        
+        // Go back to splash screen
+        switchScreen('splash');
+        
+        // Show confirmation
+        showNotification('New game started! Welcome back to the moors.', 4000);
+        
+        console.log('Game reset to initial state');
     }
 
     function showNotification(message, duration = 3000) {
@@ -2493,8 +3092,8 @@ document.addEventListener('DOMContentLoaded', () => {
             sendHome("You were sent home from extreme hunger.");
         }
         
-        // Increase tick chance
-        if (Math.random() < 0.0001) { // Low chance per frame
+        // Increase tick chance (reduced frequency)
+        if (Math.random() < 0.00002) { // Much lower chance per frame (was 0.0001)
             gameState.ticks++;
             showNotification("You feel an itch... you might have a tick!");
         }
@@ -2672,8 +3271,12 @@ document.addEventListener('DOMContentLoaded', () => {
             itemDiv.textContent = `${emoji} ${item.name}`;
             
             itemDiv.onclick = () => {
-                // Consume food
-                if (SHOP_ITEMS.find(shopItem => shopItem.name === item.name && shopItem.type === 'food')) {
+                // Consume food (shop items, Asda items, and caught fish)
+                const isShopFood = SHOP_ITEMS.find(shopItem => shopItem.name === item.name && shopItem.type === 'food');
+                const isAsdaFood = ASDA_ITEMS.find(asdaItem => asdaItem.name === item.name && asdaItem.type === 'food');
+                const isRawFish = ['Trout', 'Salmon', 'Pike', 'Perch'].includes(item.name);
+                
+                if (isShopFood || isAsdaFood || isRawFish) {
                     // Different hunger values for individual food items (less efficient than recipes)
                     const foodHungerValues = {
                         'Bread': 12,
@@ -2683,14 +3286,35 @@ document.addEventListener('DOMContentLoaded', () => {
                         'Chocolate': 8,
                         'Carrot': 6,
                         'Cucumber': 4,
-                        'Apple': 8
+                        'Apple': 8,
+                        // Raw fish from fishing
+                        'Trout': 18,
+                        'Salmon': 20,
+                        'Pike': 16,
+                        'Perch': 14,
+                        // Asda food items
+                        'Ready Meal': 25,
+                        'Frozen Pizza': 30,
+                        'Energy Drink': 5,
+                        'Protein Bar': 15,
+                        'Instant Noodles': 18,
+                        'Canned Beans': 20,
+                        'Sandwich': 22,
+                        'Yogurt': 12,
+                        'Bananas': 8,
+                        'Orange Juice': 6
                     };
                     
                     const hungerReduction = foodHungerValues[item.name] || 10;
                     gameState.player.hunger = Math.max(0, gameState.player.hunger - hungerReduction);
                     gameState.inventory.splice(index, 1);
                     menuIcons.bag.onclick(); // Refresh bag view
-                    showNotification(`You ate the ${item.name}. Hunger reduced by ${hungerReduction}.`);
+                    
+                    if (isRawFish) {
+                        showNotification(`You ate the raw ${item.name}. Fresh catch! Hunger reduced by ${hungerReduction}.`);
+                    } else {
+                        showNotification(`You ate the ${item.name}. Hunger reduced by ${hungerReduction}.`);
+                    }
                 }
             };
             bagContents.appendChild(itemDiv);
@@ -2812,6 +3436,35 @@ document.addEventListener('DOMContentLoaded', () => {
         minimapClose.onclick = () => {
             hideMinimap();
         };
+    }
+
+    // Start New Game button
+    const startNewGameBtn = document.getElementById('start-new-game');
+    if (startNewGameBtn) {
+        console.log('Start New Game button found, setting up event handler');
+        startNewGameBtn.onclick = () => {
+            console.log('Start New Game button clicked');
+            if (confirm('Are you sure you want to start a new game? All progress will be lost.')) {
+                startNewGame();
+            }
+        };
+    } else {
+        console.error('Start New Game button not found in DOM');
+        // Try to find it again after a delay
+        setTimeout(() => {
+            const btn = document.getElementById('start-new-game');
+            if (btn) {
+                console.log('Found Start New Game button on retry');
+                btn.onclick = () => {
+                    console.log('Start New Game button clicked (retry)');
+                    if (confirm('Are you sure you want to start a new game? All progress will be lost.')) {
+                        startNewGame();
+                    }
+                };
+            } else {
+                console.error('Start New Game button still not found after retry');
+            }
+        }, 1000);
     }
 
     menuIcons.phone.onclick = () => {
@@ -4184,6 +4837,36 @@ document.addEventListener('DOMContentLoaded', () => {
     // --- Start the game ---
     console.log("🎮 About to call init()...");
     init();
+    
+    // Ensure Start New Game button is properly connected (final attempt)
+    setTimeout(() => {
+        const newGameButton = document.getElementById('start-new-game');
+        console.log('Final setup - Start New Game button found:', !!newGameButton);
+        if (newGameButton) {
+            // Remove any existing handlers and add a fresh one
+            newGameButton.onclick = null;
+            newGameButton.onclick = () => {
+                console.log('Start New Game button clicked (final setup)');
+                if (confirm('Are you sure you want to start a new game? All progress will be lost.')) {
+                    startNewGame();
+                }
+            };
+            
+            // Also add event listener as backup
+            newGameButton.addEventListener('click', (e) => {
+                console.log('Start New Game button clicked (event listener backup)');
+                e.preventDefault();
+                if (confirm('Are you sure you want to start a new game? All progress will be lost.')) {
+                    startNewGame();
+                }
+            });
+            
+            console.log('Start New Game button handlers set up successfully');
+        } else {
+            console.error('Start New Game button still not found in final setup');
+        }
+    }, 500);
+    
     console.log("✅ Game initialization completed successfully!");
     
     } catch (error) {

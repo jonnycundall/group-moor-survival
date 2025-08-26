@@ -322,6 +322,37 @@ button {
     pointer-events: auto;
 }
 
+.start-new-game-btn {
+    position: absolute;
+    top: 60px;
+    left: 20px;
+    background: rgba(139, 69, 19, 0.9);
+    color: #FFD700;
+    border: 2px solid #FFD700;
+    padding: 8px 15px;
+    border-radius: 8px;
+    font-size: 14px;
+    font-weight: bold;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    pointer-events: auto;
+    z-index: 9999; /* Very high z-index to ensure it's on top */
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+    user-select: none; /* Prevent text selection */
+}
+
+.start-new-game-btn:hover {
+    background: rgba(255, 215, 0, 0.9);
+    color: #8B4513;
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(255, 215, 0, 0.4);
+}
+
+.start-new-game-btn:active {
+    transform: translateY(0px);
+    box-shadow: 0 2px 4px rgba(255, 215, 0, 0.2);
+}
+
 /* --- HUD (Heads-Up Display) --- */
 .hud {
     position: absolute;
