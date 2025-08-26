@@ -291,6 +291,7 @@ document.addEventListener('DOMContentLoaded', () => {
         { name: "Heather Fields", x: 400, y: 300, radius: 150 },
         { name: "Rocky Outcrop", x: 500, y: -400, radius: 80 },
         { name: "The Lone Tree", x: -400, y: -300, radius: 25 },
+        { name: "The Cave", x: 200, y: -500, radius: 40 },
         { name: "ASDA", x: -600, y: -600, radius: 30 },
         { name: "Pony Farm", x: 400, y: 600, radius: 40 },
     ];
@@ -470,6 +471,44 @@ document.addEventListener('DOMContentLoaded', () => {
                 } else {
                     // Surrounding cliff area - gentler slopes
                     height += Math.sin((x + 300) * 0.02) * 40;
+                }
+            }
+            
+            // Create cave entrance area with hillside and carved interior
+            if (x > 150 && x < 250 && z > -550 && z < -450) {
+                const caveX = 200;
+                const caveZ = -500;
+                const distanceFromCave = Math.sqrt((x - caveX) * (x - caveX) + (z - caveZ) * (z - caveZ));
+                
+                if (distanceFromCave < 50) {
+                    // Create a hill around the cave entrance
+                    const hillHeight = (50 - distanceFromCave) / 50;
+                    height += hillHeight * hillHeight * 40; // Gradual hill
+                    
+                    // Create the actual cave interior - carved out space
+                    if (distanceFromCave < 25) {
+                        // This creates a bowl-shaped depression for the cave interior
+                        const caveDepth = (25 - distanceFromCave) / 25;
+                        const maxDepth = 30;
+                        
+                        // Make the cave entrance area lower (walkable interior)
+                        if (distanceFromCave < 20) {
+                            height -= caveDepth * caveDepth * maxDepth;
+                        }
+                        
+                        // Create entrance tunnel - gradual slope into cave
+                        const entranceDirection = Math.atan2(z - caveZ, x - caveX);
+                        const isNearEntrance = Math.abs(entranceDirection) < 0.5; // Facing south entrance
+                        
+                        if (isNearEntrance && distanceFromCave > 15 && distanceFromCave < 25) {
+                            // Gradual slope down into cave
+                            const slopeProgress = (25 - distanceFromCave) / 10;
+                            height -= slopeProgress * 15; // Gentler slope into cave
+                        }
+                    }
+                    
+                    // Add rocky texture to the hill
+                    height += Math.sin(x * 0.2) * Math.sin(z * 0.15) * 5;
                 }
             }
             
@@ -1054,6 +1093,358 @@ document.addEventListener('DOMContentLoaded', () => {
             rock.castShadow = true;
             scene.add(rock);
         }
+        
+        // Create cave entrance
+        createCave();
+    }
+    
+    // Global cave state
+    let caveEntrance = null;
+    let insideCave = false;
+    let caveInteriorObjects = [];
+    
+    function createCave() {
+        const caveX = 200;
+        const caveZ = -500;
+        const caveY = getTerrainHeight(caveX, caveZ);
+        
+        // Create cave entrance opening - this will be the visible entrance
+        const entranceGeometry = new THREE.CylinderGeometry(8, 12, 15, 12);
+        const entranceMaterial = new THREE.MeshLambertMaterial({ 
+            color: 0x1a1a1a, // Very dark
+            side: THREE.BackSide // Render inside so we can see through
+        });
+        const entranceOpening = new THREE.Mesh(entranceGeometry, entranceMaterial);
+        entranceOpening.position.set(caveX, caveY + 7, caveZ + 12); // Slightly forward from center
+        entranceOpening.rotation.z = Math.PI / 2; // Rotate to make it horizontal
+        entranceOpening.name = 'caveEntrance';
+        scene.add(entranceOpening);
+        
+        // Create main cave chamber - large interior space
+        const caveInteriorGeometry = new THREE.SphereGeometry(30, 16, 16, 0, Math.PI * 2, 0, Math.PI / 2);
+        const caveInteriorMaterial = new THREE.MeshLambertMaterial({ 
+            color: 0x2a2a2a,
+            side: THREE.BackSide // Render inside of sphere
+        });
+        const caveInterior = new THREE.Mesh(caveInteriorGeometry, caveInteriorMaterial);
+        caveInterior.position.set(caveX, caveY - 5, caveZ - 15); // Underground
+        caveInterior.name = 'caveInterior';
+        scene.add(caveInterior);
+        
+        // Create cave tunnel connecting entrance to main chamber
+        const tunnelGeometry = new THREE.CylinderGeometry(6, 8, 25, 8);
+        const tunnelMaterial = new THREE.MeshLambertMaterial({ 
+            color: 0x333333,
+            side: THREE.BackSide
+        });
+        const tunnel = new THREE.Mesh(tunnelGeometry, tunnelMaterial);
+        tunnel.position.set(caveX, caveY, caveZ - 5);
+        tunnel.rotation.x = Math.PI / 2; // Rotate to make it go back into the hill
+        scene.add(tunnel);
+        
+        // Create rock walls around entrance
+        for (let i = 0; i < 12; i++) {
+            const rockGeometry = new THREE.BoxGeometry(
+                Math.random() * 8 + 4,
+                Math.random() * 12 + 6,
+                Math.random() * 8 + 4
+            );
+            const rockMaterial = new THREE.MeshLambertMaterial({ color: 0x444444 });
+            const rock = new THREE.Mesh(rockGeometry, rockMaterial);
+            
+            const angle = (i / 12) * Math.PI * 2;
+            const distance = 18 + Math.random() * 8;
+            rock.position.set(
+                caveX + Math.cos(angle) * distance,
+                caveY + rock.geometry.parameters.height / 2 + 5,
+                caveZ + Math.sin(angle) * distance
+            );
+            rock.rotation.y = Math.random() * Math.PI * 2;
+            rock.rotation.x = (Math.random() - 0.5) * 0.3;
+            rock.castShadow = true;
+            scene.add(rock);
+        }
+        
+        // Create entrance archway/overhang
+        const archGeometry = new THREE.TorusGeometry(12, 4, 8, 16, Math.PI);
+        const archMaterial = new THREE.MeshLambertMaterial({ color: 0x333333 });
+        const arch = new THREE.Mesh(archGeometry, archMaterial);
+        arch.position.set(caveX, caveY + 18, caveZ + 8);
+        arch.rotation.x = -Math.PI / 2;
+        arch.castShadow = true;
+        scene.add(arch);
+        
+        // Add vegetation around entrance
+        for (let i = 0; i < 8; i++) {
+            const mossGeometry = new THREE.SphereGeometry(2 + Math.random() * 3, 6, 4);
+            const mossMaterial = new THREE.MeshLambertMaterial({ color: 0x228B22 });
+            const moss = new THREE.Mesh(mossGeometry, mossMaterial);
+            
+            const angle = Math.random() * Math.PI * 2;
+            const distance = 15 + Math.random() * 10;
+            moss.position.set(
+                caveX + Math.cos(angle) * distance,
+                caveY + 2,
+                caveZ + Math.sin(angle) * distance
+            );
+            moss.scale.set(0.5 + Math.random() * 0.5, 0.3, 0.5 + Math.random() * 0.5);
+            scene.add(moss);
+        }
+        
+        // Store reference to the entrance for interaction detection
+        caveEntrance = entranceOpening;
+    }
+    
+    function checkCaveEntrance() {
+        if (!caveEntrance) return;
+        
+        const playerX = gameState.player.x;
+        const playerZ = gameState.player.y; // Note: gameState.player.y is actually Z coordinate
+        const caveX = 200;
+        const caveZ = -500;
+        
+        const distance = Math.sqrt((playerX - caveX) * (playerX - caveX) + (playerZ - caveZ) * (playerZ - caveZ));
+        
+        // If player is approaching the cave entrance area
+        if (distance < 30 && distance > 20) {
+            if (!insideCave) {
+                showCaveEntranceMessage();
+            }
+        }
+        
+        // Enter cave when player walks into the carved-out interior space
+        if (distance < 20 && !insideCave) {
+            // Check if player is in the lower cave area (carved out terrain)
+            const playerHeight = getTerrainHeight(playerX, playerZ);
+            const outsideHeight = getTerrainHeight(caveX + 50, caveZ); // Reference height outside cave
+            
+            // If player is significantly lower than outside terrain, they're in the cave
+            if (playerHeight < outsideHeight - 10) {
+                enterCave();
+            }
+        } else if (insideCave && (distance > 35 || getTerrainHeight(playerX, playerZ) > getTerrainHeight(caveX + 50, caveZ) - 5)) {
+            // Exit cave if player moves far away OR climbs back up to normal terrain level
+            exitCave();
+        }
+    }
+    
+    function showCaveEntranceMessage() {
+        // Show UI message that player can enter cave
+        const existingMessage = document.getElementById('cave-entrance-message');
+        if (existingMessage) return; // Don't show multiple messages
+        
+        const message = document.createElement('div');
+        message.id = 'cave-entrance-message';
+        message.style.position = 'fixed';
+        message.style.top = '20px';
+        message.style.left = '50%';
+        message.style.transform = 'translateX(-50%)';
+        message.style.background = 'rgba(0, 0, 0, 0.8)';
+        message.style.color = 'white';
+        message.style.padding = '10px 20px';
+        message.style.borderRadius = '5px';
+        message.style.fontSize = '16px';
+        message.style.zIndex = '1000';
+        message.textContent = 'Walk closer to enter the cave...';
+        document.body.appendChild(message);
+        
+        // Remove message after 3 seconds
+        setTimeout(() => {
+            if (document.getElementById('cave-entrance-message')) {
+                document.body.removeChild(message);
+            }
+        }, 3000);
+    }
+    
+    function enterCave() {
+        insideCave = true;
+        console.log("Entering cave...");
+        
+        // Dim the lighting to simulate cave interior
+        if (scene.getObjectByName('directionalLight')) {
+            const light = scene.getObjectByName('directionalLight');
+            light.intensity = 0.3; // Much dimmer
+        }
+        
+        // Create cave interior
+        createCaveInterior();
+        
+        // Show cave entered message
+        const message = document.createElement('div');
+        message.style.position = 'fixed';
+        message.style.top = '50%';
+        message.style.left = '50%';
+        message.style.transform = 'translate(-50%, -50%)';
+        message.style.background = 'rgba(0, 0, 0, 0.9)';
+        message.style.color = 'white';
+        message.style.padding = '20px';
+        message.style.borderRadius = '10px';
+        message.style.fontSize = '18px';
+        message.style.textAlign = 'center';
+        message.style.zIndex = '1000';
+        message.innerHTML = '🔦 You have entered the cave!<br>Move around to explore the dark interior...';
+        document.body.appendChild(message);
+        
+        setTimeout(() => {
+            document.body.removeChild(message);
+        }, 3000);
+    }
+    
+    function exitCave() {
+        insideCave = false;
+        console.log("Exiting cave...");
+        
+        // Restore normal lighting
+        if (scene.getObjectByName('directionalLight')) {
+            const light = scene.getObjectByName('directionalLight');
+            light.intensity = 0.8; // Normal brightness
+        }
+        
+        // Remove cave interior objects
+        caveInteriorObjects.forEach(obj => {
+            scene.remove(obj);
+        });
+        caveInteriorObjects = [];
+        
+        // Show cave exit message
+        const message = document.createElement('div');
+        message.style.position = 'fixed';
+        message.style.top = '50%';
+        message.style.left = '50%';
+        message.style.transform = 'translate(-50%, -50%)';
+        message.style.background = 'rgba(50, 100, 50, 0.9)';
+        message.style.color = 'white';
+        message.style.padding = '20px';
+        message.style.borderRadius = '10px';
+        message.style.fontSize = '18px';
+        message.style.textAlign = 'center';
+        message.style.zIndex = '1000';
+        message.innerHTML = '🌞 You have exited the cave!<br>Back in the fresh moorland air...';
+        document.body.appendChild(message);
+        
+        setTimeout(() => {
+            document.body.removeChild(message);
+        }, 2000);
+    }
+    
+    function createCaveInterior() {
+        const caveX = 200;
+        const caveZ = -500;
+        const caveY = getTerrainHeight(caveX, caveZ);
+        
+        // Create multiple light sources for atmospheric cave lighting
+        const caveLight1 = new THREE.PointLight(0xffa500, 0.6, 60); // Orange main light
+        caveLight1.position.set(caveX, caveY + 10, caveZ - 15);
+        caveLight1.name = 'caveLight1';
+        scene.add(caveLight1);
+        caveInteriorObjects.push(caveLight1);
+        
+        const caveLight2 = new THREE.PointLight(0xff6600, 0.4, 40); // Dimmer orange light
+        caveLight2.position.set(caveX - 15, caveY + 8, caveZ - 25);
+        caveLight2.name = 'caveLight2';
+        scene.add(caveLight2);
+        caveInteriorObjects.push(caveLight2);
+        
+        // Create stalactites hanging from ceiling in main chamber
+        for (let i = 0; i < 12; i++) {
+            const stalactiteGeometry = new THREE.ConeGeometry(
+                1 + Math.random() * 3,
+                8 + Math.random() * 15,
+                8
+            );
+            const stalactiteMaterial = new THREE.MeshLambertMaterial({ color: 0x555555 });
+            const stalactite = new THREE.Mesh(stalactiteGeometry, stalactiteMaterial);
+            stalactite.position.set(
+                caveX + (Math.random() - 0.5) * 40,
+                caveY + 20 - stalactite.geometry.parameters.height / 2,
+                caveZ - 15 + (Math.random() - 0.5) * 50
+            );
+            stalactite.rotation.x = (Math.random() - 0.5) * 0.3;
+            stalactite.castShadow = true;
+            scene.add(stalactite);
+            caveInteriorObjects.push(stalactite);
+        }
+        
+        // Create stalagmites rising from floor
+        for (let i = 0; i < 10; i++) {
+            const stalagmiteGeometry = new THREE.ConeGeometry(
+                2 + Math.random() * 4,
+                5 + Math.random() * 12,
+                8
+            );
+            const stalagmiteMaterial = new THREE.MeshLambertMaterial({ color: 0x666666 });
+            const stalagmite = new THREE.Mesh(stalagmiteGeometry, stalagmiteMaterial);
+            stalagmite.position.set(
+                caveX + (Math.random() - 0.5) * 35,
+                caveY - 15 + stalagmite.geometry.parameters.height / 2,
+                caveZ - 15 + (Math.random() - 0.5) * 45
+            );
+            stalagmite.rotation.z = (Math.random() - 0.5) * 0.2;
+            stalagmite.castShadow = true;
+            scene.add(stalagmite);
+            caveInteriorObjects.push(stalagmite);
+        }
+        
+        // Add large cave crystals that glow
+        for (let i = 0; i < 6; i++) {
+            const crystalGeometry = new THREE.OctahedronGeometry(3 + Math.random() * 4);
+            const crystalMaterial = new THREE.MeshLambertMaterial({ 
+                color: 0x4169E1,
+                emissive: 0x002288,
+                transparent: true,
+                opacity: 0.9
+            });
+            const crystal = new THREE.Mesh(crystalGeometry, crystalMaterial);
+            crystal.position.set(
+                caveX + (Math.random() - 0.5) * 30,
+                caveY - 10 + Math.random() * 8,
+                caveZ - 15 + (Math.random() - 0.5) * 40
+            );
+            crystal.rotation.x = Math.random() * Math.PI;
+            crystal.rotation.y = Math.random() * Math.PI;
+            crystal.rotation.z = Math.random() * Math.PI;
+            scene.add(crystal);
+            caveInteriorObjects.push(crystal);
+            
+            // Add point light to each crystal for glow effect
+            const crystalLight = new THREE.PointLight(0x4169E1, 0.3, 20);
+            crystalLight.position.copy(crystal.position);
+            scene.add(crystalLight);
+            caveInteriorObjects.push(crystalLight);
+        }
+        
+        // Add cave floor details - scattered rocks and debris
+        for (let i = 0; i < 15; i++) {
+            const rockGeometry = new THREE.SphereGeometry(1 + Math.random() * 2, 6, 4);
+            const rockMaterial = new THREE.MeshLambertMaterial({ color: 0x444444 });
+            const floorRock = new THREE.Mesh(rockGeometry, rockMaterial);
+            floorRock.position.set(
+                caveX + (Math.random() - 0.5) * 35,
+                caveY - 15 + floorRock.geometry.parameters.radius,
+                caveZ - 15 + (Math.random() - 0.5) * 45
+            );
+            floorRock.scale.set(
+                0.5 + Math.random() * 0.8,
+                0.3 + Math.random() * 0.5,
+                0.5 + Math.random() * 0.8
+            );
+            scene.add(floorRock);
+            caveInteriorObjects.push(floorRock);
+        }
+        
+        // Create cave pool - underground water
+        const poolGeometry = new THREE.CircleGeometry(8, 16);
+        const poolMaterial = new THREE.MeshLambertMaterial({ 
+            color: 0x000080, 
+            transparent: true, 
+            opacity: 0.8,
+            emissive: 0x001133
+        });
+        const cavePool = new THREE.Mesh(poolGeometry, poolMaterial);
+        cavePool.rotation.x = -Math.PI / 2;
+        cavePool.position.set(caveX - 10, caveY - 15, caveZ - 25);
+        scene.add(cavePool);
+        caveInteriorObjects.push(cavePool);
     }
     
     function createSkySystem() {
@@ -1349,6 +1740,9 @@ document.addEventListener('DOMContentLoaded', () => {
             
             // Update pony position if hired
             updatePony3D();
+            
+            // Check cave entrance proximity
+            checkCaveEntrance();
             
             // Animate waterfall with more realistic flow
             if (waterfallMesh && waterfallMesh.material && waterfallMesh.material.map) {
@@ -3297,6 +3691,11 @@ document.addEventListener('DOMContentLoaded', () => {
                     color = '#9e9e9e'; // Grey for stones
                     size = 4;
                     symbol = '🗿';
+                    break;
+                case "The Cave":
+                    color = '#3e2723'; // Dark brown for cave
+                    size = 5;
+                    symbol = '🕳️';
                     break;
                 default:
                     color = '#ff9800'; // Orange for other locations
