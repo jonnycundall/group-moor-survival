@@ -1894,7 +1894,7 @@ document.addEventListener('DOMContentLoaded', () => {
         locationNameDisplay.textContent = playerLocation.name;
         
         // Update menu icons based on context
-        const nearRiver = getDistanceTo('The River Valley') < 50;
+        const nearRiver = isNearRiver();
         const nearPonyFarm = getDistanceTo('Pony Farm') < 30;
         const nearTent = gameState.world.tentPitched && getDistanceToPoint(gameState.world.tentLocation) < 30;
         const hasTentInBag = gameState.inventory.some(item => item.name.includes('Tent'));
@@ -1928,6 +1928,22 @@ document.addEventListener('DOMContentLoaded', () => {
     
     function getDistanceToPoint(point) {
          return Math.sqrt(Math.pow(gameState.player.x - point.x, 2) + Math.pow(gameState.player.y - point.y, 2));
+    }
+
+    function isNearRiver() {
+        // The river runs along x = -200 with some curves based on sin wave
+        // Check if player is within a reasonable distance of the river path
+        const playerX = gameState.player.x;
+        const playerY = gameState.player.y;
+        
+        // Calculate the river's x position at the player's y coordinate
+        // This matches the river generation logic: riverX = -200 + Math.sin(riverZ * 0.003) * 30
+        const riverX = -200 + Math.sin(playerY * 0.003) * 30;
+        
+        // Check if player is within 80 units of the river
+        const distanceToRiver = Math.abs(playerX - riverX);
+        
+        return distanceToRiver < 80;
     }
 
     function sendHome(reason) {
