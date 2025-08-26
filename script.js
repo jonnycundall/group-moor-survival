@@ -154,8 +154,44 @@ document.addEventListener('DOMContentLoaded', () => {
         'Chocolate': '🍫',
         'Carrot': '🥕',
         'Cucumber': '🥒',
-        'Apple': '🍎'
+        'Apple': '🍎',
+        'Trout': '🐟',
+        'Salmon': '🍣',
+        'Pike': '🐠',
+        'Perch': '🎣'
     };
+    
+    // Pony hire system
+    const PONIES = [
+        {
+            name: 'Allicorn',
+            filename: 'allicorn.jpg',
+            speed: 4, // 2x normal speed
+            cost: 50,
+            description: 'A magical allicorn with incredible speed and grace'
+        },
+        {
+            name: 'Black Pony',
+            filename: 'blackpony.png',
+            speed: 3.5,
+            cost: 30,
+            description: 'A sturdy black pony, reliable and strong'
+        },
+        {
+            name: 'Pegasus',
+            filename: 'pegasus.png',
+            speed: 5, // Fastest
+            cost: 80,
+            description: 'A winged pegasus that seems to glide across the moors'
+        },
+        {
+            name: 'Unicorn',
+            filename: 'unicorn.png',
+            speed: 4.5,
+            cost: 70,
+            description: 'A mystical unicorn with a beautiful horn'
+        }
+    ];
     
     // Recipe system
     const RECIPES = [
@@ -214,6 +250,34 @@ document.addEventListener('DOMContentLoaded', () => {
             ingredients: ['Bread', 'Ham', 'Cheese', 'Apple', 'Carrot'],
             hungerValue: 60,
             description: 'A complete meal using the best of your supplies'
+        },
+        {
+            name: 'Grilled Trout',
+            emoji: '🔥🐟',
+            ingredients: ['Trout'],
+            hungerValue: 25,
+            description: 'Fresh trout cooked over an open fire'
+        },
+        {
+            name: 'Salmon Sandwich',
+            emoji: '🥪🍣',
+            ingredients: ['Bread', 'Salmon'],
+            hungerValue: 40,
+            description: 'Delicious salmon on fresh bread'
+        },
+        {
+            name: 'Fish & Chips',
+            emoji: '🍟🐠',
+            ingredients: ['Pike', 'Carrot'], // Using carrot as chips substitute
+            hungerValue: 45,
+            description: 'Classic fish and chips with moorland vegetables'
+        },
+        {
+            name: 'Fisherman\'s Platter',
+            emoji: '🍽️🎣',
+            ingredients: ['Trout', 'Salmon', 'Bread'],
+            hungerValue: 55,
+            description: 'A feast of fresh caught fish'
         }
     ];
     
@@ -1012,6 +1076,9 @@ document.addEventListener('DOMContentLoaded', () => {
             // Update companion AI and position
             updateCompanion();
             
+            // Update pony position if hired
+            updatePony3D();
+            
             // Animate waterfall
             if (waterfallMesh && waterfallMesh.material && waterfallMesh.material.map) {
                 waterfallMesh.material.map.offset.y += 0.01; // Flowing animation
@@ -1338,7 +1405,14 @@ document.addEventListener('DOMContentLoaded', () => {
         // Add universal modal close functionality
         document.querySelectorAll('.modal .close-button').forEach(btn => {
             btn.onclick = () => {
-                btn.closest('.modal').style.display = 'none';
+                const modal = btn.closest('.modal');
+                
+                // Handle special cleanup for different modals
+                if (modal === modals.generic && fishingGame.active) {
+                    endFishingGame();
+                }
+                
+                modal.style.display = 'none';
             }
         });
     }
@@ -1579,6 +1653,13 @@ document.addEventListener('DOMContentLoaded', () => {
             createTent3D(gameState.world.tentLocation.x, gameState.world.tentLocation.y, tentTypeToUse);
         }
         
+        // Restore pony if hired
+        if (!window.no3DGraphics && gameState.pony.hired && gameState.pony.type) {
+            console.log('Restoring pony...');
+            createPony3D();
+            updatePonyUI();
+        }
+        
         if (!gameLoop.running) {
             console.log('Starting game loop...');
             gameLoop.start();
@@ -1739,6 +1820,11 @@ document.addEventListener('DOMContentLoaded', () => {
         }
         if (gameState.ticks > 5) { // Threshold for getting sick
              sendHome("You got sick from too many tick bites!");
+        }
+        
+        // Check if pony needs to be auto-returned
+        if (gameState.pony.hired) {
+            checkPonyAutoReturn();
         }
     }
 
@@ -2130,10 +2216,637 @@ document.addEventListener('DOMContentLoaded', () => {
     };
     
     // Placeholder for other mini-games
-    menuIcons.fishing.onclick = () => { if (!menuIcons.fishing.classList.contains('disabled')) showNotification("Fishing mini-game would start here!"); };
+    menuIcons.fishing.onclick = () => { 
+        if (!menuIcons.fishing.classList.contains('disabled')) {
+            startFishingMinigame();
+        }
+    };
+
+    menuIcons.pony.onclick = () => {
+        if (!menuIcons.pony.classList.contains('disabled')) {
+            if (gameState.pony.hired) {
+                // Return pony
+                returnPony();
+            } else {
+                // Show pony hire selection
+                showPonyHireSelection();
+            }
+        }
+    };
 
 
     // And so on for all other menu items...
+
+    // --- PONY HIRE FUNCTIONALITY ---
+    function showPonyHireSelection() {
+        genericModalTitle.textContent = "Pony Hire - Choose Your Mount";
+        
+        let content = '<div class="pony-selection-container">';
+        content += `<p>Welcome to the Pony Farm! Choose your trusty steed for exploring the moors.</p>`;
+        content += `<p>Budget: £${gameState.budget.toFixed(2)}</p>`;
+        content += '<div class="pony-grid">';
+        
+        PONIES.forEach((pony, index) => {
+            const canAfford = gameState.budget >= pony.cost;
+            const disabledClass = canAfford ? '' : 'disabled';
+            const clickHandler = canAfford ? `onclick="hirePony(${index})"` : '';
+            
+            content += `
+                <div class="pony-card ${disabledClass}" ${clickHandler} style="
+                    border: 2px solid ${canAfford ? '#4caf50' : '#ccc'};
+                    margin: 10px;
+                    padding: 15px;
+                    border-radius: 10px;
+                    background: ${canAfford ? '#f8f8f8' : '#f0f0f0'};
+                    cursor: ${canAfford ? 'pointer' : 'not-allowed'};
+                    opacity: ${canAfford ? '1' : '0.6'};
+                    transition: all 0.3s ease;
+                ">
+                    <img src="public/images/ponies/${pony.filename}" alt="${pony.name}" 
+                         style="width: 100px; height: 100px; object-fit: cover; border-radius: 8px; margin-bottom: 10px;"
+                         onerror="this.style.display='none'; this.nextElementSibling.style.display='block';">
+                    <div style="display: none; width: 100px; height: 100px; background: #ddd; 
+                                border-radius: 8px; margin-bottom: 10px; display: flex; 
+                                align-items: center; justify-content: center; font-size: 12px;">
+                        🐴 ${pony.name}
+                    </div>
+                    <h4 style="margin: 10px 0 5px 0; color: #333;">${pony.name}</h4>
+                    <p style="margin: 5px 0; font-size: 12px; color: #666;">${pony.description}</p>
+                    <div style="margin: 10px 0;">
+                        <div><strong>Speed:</strong> ${pony.speed}x</div>
+                        <div><strong>Cost:</strong> £${pony.cost}</div>
+                    </div>
+                    ${!canAfford ? '<div style="color: #f44336; font-size: 12px;">Insufficient funds</div>' : ''}
+                </div>
+            `;
+        });
+        
+        content += '</div>';
+        content += `<p style="margin-top: 20px; font-size: 14px; color: #666;">
+                      🚨 <strong>Return Policy:</strong> You must return the pony to your tent when done. 
+                      The pony will automatically return if you venture too far from familiar areas.
+                    </p>`;
+        content += '</div>';
+        
+        genericModalContent.innerHTML = content;
+        openModal(modals.generic);
+    }
+    
+    function hirePony(ponyIndex) {
+        const pony = PONIES[ponyIndex];
+        if (!pony || gameState.budget < pony.cost) {
+            showNotification("Cannot afford this pony!");
+            return;
+        }
+        
+        // Deduct cost
+        gameState.budget -= pony.cost;
+        
+        // Set pony state
+        gameState.pony.hired = true;
+        gameState.pony.type = pony.name;
+        gameState.pony.filename = pony.filename;
+        gameState.pony.speed = pony.speed;
+        gameState.pony.cost = pony.cost;
+        
+        // Update player speed
+        gameState.player.speed = pony.speed;
+        
+        // Close modal
+        modals.generic.style.display = 'none';
+        
+        // Show success message
+        showNotification(`🐴 You hired ${pony.name}! Speed increased to ${pony.speed}x. Return to your tent when done.`);
+        
+        // Update UI to show pony is hired
+        updatePonyUI();
+        
+        // Create 3D pony if in 3D mode
+        createPony3D();
+        
+        earnBadge("Horse Whisperer");
+    }
+    
+    function returnPony() {
+        if (!gameState.world.tentPitched) {
+            showNotification("You need to pitch your tent before returning the pony!");
+            return;
+        }
+        
+        const distanceToTent = getDistanceToPoint(gameState.world.tentLocation);
+        if (distanceToTent > 50) {
+            showNotification(`You need to be closer to your tent to return the pony. Distance: ${Math.round(distanceToTent)}m`);
+            return;
+        }
+        
+        const ponyName = gameState.pony.type;
+        
+        // Reset pony state
+        gameState.pony.hired = false;
+        gameState.pony.type = null;
+        gameState.pony.filename = null;
+        gameState.pony.speed = null;
+        
+        // Reset player speed
+        gameState.player.speed = 2; // Default speed
+        
+        // Remove 3D pony
+        removePony3D();
+        
+        // Update UI
+        updatePonyUI();
+        
+        showNotification(`🐴 ${ponyName} has been safely returned to the farm. Thank you for riding responsibly!`);
+    }
+    
+    function updatePonyUI() {
+        // Update pony menu icon based on state
+        if (gameState.pony.hired) {
+            menuIcons.pony.setAttribute('data-tooltip', `Return ${gameState.pony.type} (At Tent)`);
+            menuIcons.pony.style.background = '#4caf50'; // Green when pony hired
+        } else {
+            menuIcons.pony.setAttribute('data-tooltip', 'Pony Hire (Near Farm)');
+            menuIcons.pony.style.background = ''; // Reset background
+        }
+    }
+    
+    function createPony3D() {
+        if (window.no3DGraphics || !scene) return;
+        
+        // Remove existing pony
+        removePony3D();
+        
+        const pony = PONIES.find(p => p.name === gameState.pony.type);
+        if (!pony) return;
+        
+        // Create pony sprite near player
+        const loader = new THREE.TextureLoader();
+        loader.load(
+            `public/images/ponies/${pony.filename}`,
+            texture => {
+                const spriteMaterial = new THREE.SpriteMaterial({ 
+                    map: texture,
+                    transparent: true
+                });
+                
+                window.pony3D = new THREE.Sprite(spriteMaterial);
+                window.pony3D.scale.set(20, 20, 1); // Make it visible
+                window.pony3D.name = 'pony3D';
+                
+                // Position pony near player
+                const ponyX = gameState.player.x + 15;
+                const ponyZ = gameState.player.y + 15;
+                window.pony3D.position.set(
+                    ponyX,
+                    getTerrainHeight(ponyX, ponyZ) + 10,
+                    ponyZ
+                );
+                
+                scene.add(window.pony3D);
+                console.log(`🐴 ${pony.name} 3D sprite created`);
+            },
+            undefined,
+            error => {
+                console.warn('Could not load pony texture:', error);
+                // Create fallback pony
+                createPonyFallback();
+            }
+        );
+    }
+    
+    function createPonyFallback() {
+        if (window.no3DGraphics || !scene) return;
+        
+        // Create a simple colored cube as fallback
+        const geometry = new THREE.BoxGeometry(8, 12, 4);
+        const material = new THREE.MeshLambertMaterial({ color: 0x8B4513 }); // Brown
+        window.pony3D = new THREE.Mesh(geometry, material);
+        window.pony3D.name = 'pony3D';
+        
+        // Position pony near player
+        const ponyX = gameState.player.x + 15;
+        const ponyZ = gameState.player.y + 15;
+        window.pony3D.position.set(
+            ponyX,
+            getTerrainHeight(ponyX, ponyZ) + 6,
+            ponyZ
+        );
+        
+        scene.add(window.pony3D);
+        console.log('🐴 Fallback pony 3D model created');
+    }
+    
+    function removePony3D() {
+        if (window.pony3D && scene) {
+            scene.remove(window.pony3D);
+            window.pony3D = null;
+            console.log('🐴 Pony 3D model removed');
+        }
+    }
+    
+    function updatePony3D() {
+        if (!window.pony3D || !gameState.pony.hired) return;
+        
+        // Keep pony near player
+        const ponyX = gameState.player.x + 15;
+        const ponyZ = gameState.player.y + 15;
+        window.pony3D.position.set(
+            ponyX,
+            getTerrainHeight(ponyX, ponyZ) + 10,
+            ponyZ
+        );
+        
+        // Make pony face the camera (billboard effect) if it's a sprite
+        if (window.pony3D.material && window.pony3D.material.type === 'SpriteMaterial') {
+            // Sprites automatically face the camera
+        }
+    }
+    
+    function checkPonyAutoReturn() {
+        if (!gameState.pony.hired) return;
+        
+        // Check if player is too far from map center (ponies get scared in unfamiliar territory)
+        const distanceFromCenter = Math.sqrt(gameState.player.x * gameState.player.x + gameState.player.y * gameState.player.y);
+        
+        if (distanceFromCenter > terrainSize * 0.4) { // 40% of terrain size
+            // Auto-return pony
+            const ponyName = gameState.pony.type;
+            
+            // Reset pony state
+            gameState.pony.hired = false;
+            gameState.pony.type = null;
+            gameState.pony.filename = null;
+            gameState.pony.speed = null;
+            
+            // Reset player speed
+            gameState.player.speed = 2; // Default speed
+            
+            // Remove 3D pony
+            removePony3D();
+            
+            // Update UI
+            updatePonyUI();
+            
+            showNotification(`🐴 ${ponyName} got spooked by the remote wilderness and returned to the farm automatically. No refund given.`);
+        }
+    }
+
+    // --- FISHING MINI-GAME FUNCTIONALITY ---
+    let fishingGame = {
+        active: false,
+        canvas: null,
+        ctx: null,
+        fishingSpot: { x: 0, y: 0 },
+        player: { x: 50, y: 150 },
+        fish: [],
+        activeFish: null,
+        waitingForBite: false,
+        biteTimer: 0,
+        score: 0,
+        gameTime: 0,
+        clickWindow: 0,
+        fishingRod: null
+    };
+
+    function startFishingMinigame() {
+        // Check if player has fishing rod
+        const hasFishingRod = gameState.inventory.some(item => item.name.includes('Fishing Rod'));
+        if (!hasFishingRod) {
+            showNotification("You need a fishing rod! Buy one from ASDA first.");
+            return;
+        }
+
+        fishingGame.fishingRod = gameState.inventory.find(item => item.name.includes('Fishing Rod'));
+        
+        genericModalTitle.textContent = "🎣 Fishing by the River";
+        
+        let content = `
+            <div class="fishing-game-container">
+                <p>Choose your fishing spot along the river!</p>
+                <canvas id="fishing-canvas" width="400" height="300" style="
+                    border: 2px solid #4a90e2;
+                    background: linear-gradient(180deg, #87CEEB 0%, #4682B4 50%, #2F4F4F 100%);
+                    image-rendering: pixelated;
+                    image-rendering: -moz-crisp-edges;
+                    image-rendering: crisp-edges;
+                    cursor: crosshair;
+                "></canvas>
+                <div class="fishing-ui">
+                    <div>🎣 Rod: ${fishingGame.fishingRod.name}</div>
+                    <div>🐟 Caught: <span id="fish-score">0</span></div>
+                    <div id="fishing-status">Click to choose your fishing spot</div>
+                </div>
+            </div>
+        `;
+        
+        genericModalContent.innerHTML = content;
+        openModal(modals.generic);
+        
+        // Initialize fishing game
+        initFishingGame();
+    }
+
+    function initFishingGame() {
+        const canvas = document.getElementById('fishing-canvas');
+        if (!canvas) return;
+        
+        fishingGame.canvas = canvas;
+        fishingGame.ctx = canvas.getContext('2d');
+        fishingGame.active = true;
+        fishingGame.score = 0;
+        fishingGame.gameTime = 0;
+        fishingGame.fish = [];
+        fishingGame.activeFish = null;
+        fishingGame.waitingForBite = false;
+        
+        // Set up pixelated rendering
+        fishingGame.ctx.imageSmoothingEnabled = false;
+        
+        // Add click handler for choosing fishing spot
+        canvas.addEventListener('click', handleFishingClick);
+        
+        // Start game loop
+        fishingGameLoop();
+        
+        // Generate ambient fish in the river
+        generateAmbientFish();
+    }
+
+    function handleFishingClick(event) {
+        if (!fishingGame.active) return;
+        
+        const rect = fishingGame.canvas.getBoundingClientRect();
+        const x = event.clientX - rect.left;
+        const y = event.clientY - rect.top;
+        
+        if (fishingGame.activeFish && fishingGame.clickWindow > 0) {
+            // Player is trying to catch the biting fish
+            const distance = Math.sqrt(
+                Math.pow(x - fishingGame.activeFish.x, 2) + 
+                Math.pow(y - fishingGame.activeFish.y, 2)
+            );
+            
+            if (distance < 30) {
+                // Successful catch!
+                catchFish(fishingGame.activeFish);
+                fishingGame.activeFish = null;
+                fishingGame.clickWindow = 0;
+                fishingGame.waitingForBite = false;
+            } else {
+                // Missed the fish
+                document.getElementById('fishing-status').textContent = "Missed! The fish got away...";
+                fishingGame.activeFish = null;
+                fishingGame.clickWindow = 0;
+                fishingGame.waitingForBite = false;
+                setTimeout(() => {
+                    if (fishingGame.active) {
+                        document.getElementById('fishing-status').textContent = "Click to choose a new fishing spot";
+                    }
+                }, 2000);
+            }
+        } else if (!fishingGame.waitingForBite) {
+            // Player is choosing fishing spot
+            fishingGame.fishingSpot.x = x;
+            fishingGame.fishingSpot.y = Math.max(100, y); // Keep above water surface
+            fishingGame.player.x = Math.max(20, x - 30); // Position player near spot
+            fishingGame.waitingForBite = true;
+            fishingGame.biteTimer = Math.random() * 3000 + 2000; // 2-5 seconds
+            
+            document.getElementById('fishing-status').textContent = "Waiting for a bite... be patient!";
+        }
+    }
+
+    function generateAmbientFish() {
+        fishingGame.fish = [];
+        for (let i = 0; i < 5; i++) {
+            fishingGame.fish.push({
+                x: Math.random() * 380 + 10,
+                y: Math.random() * 100 + 150, // In water area
+                vx: (Math.random() - 0.5) * 2,
+                vy: (Math.random() - 0.5) * 1,
+                size: Math.random() * 8 + 4,
+                color: ['#FF6B35', '#F7931E', '#FFD23F', '#06FFA5'][Math.floor(Math.random() * 4)],
+                type: ['trout', 'salmon', 'pike', 'perch'][Math.floor(Math.random() * 4)]
+            });
+        }
+    }
+
+    function fishingGameLoop() {
+        if (!fishingGame.active) return;
+        
+        fishingGame.gameTime += 16; // ~60fps
+        
+        // Update bite timer
+        if (fishingGame.waitingForBite && !fishingGame.activeFish) {
+            fishingGame.biteTimer -= 16;
+            if (fishingGame.biteTimer <= 0) {
+                triggerFishBite();
+            }
+        }
+        
+        // Update click window
+        if (fishingGame.clickWindow > 0) {
+            fishingGame.clickWindow -= 16;
+            if (fishingGame.clickWindow <= 0 && fishingGame.activeFish) {
+                // Fish escaped
+                document.getElementById('fishing-status').textContent = "Too slow! The fish escaped...";
+                fishingGame.activeFish = null;
+                fishingGame.waitingForBite = false;
+                setTimeout(() => {
+                    if (fishingGame.active) {
+                        document.getElementById('fishing-status').textContent = "Click to choose a new fishing spot";
+                    }
+                }, 2000);
+            }
+        }
+        
+        // Update ambient fish
+        updateAmbientFish();
+        
+        // Draw everything
+        drawFishingGame();
+        
+        // Continue loop
+        if (fishingGame.active) {
+            requestAnimationFrame(fishingGameLoop);
+        }
+    }
+
+    function triggerFishBite() {
+        // Create a fish near the fishing spot
+        fishingGame.activeFish = {
+            x: fishingGame.fishingSpot.x + (Math.random() - 0.5) * 40,
+            y: fishingGame.fishingSpot.y + 20 + (Math.random() - 0.5) * 20,
+            size: Math.random() * 12 + 8,
+            color: '#FF0000', // Red for active fish
+            type: ['trout', 'salmon', 'pike', 'perch'][Math.floor(Math.random() * 4)],
+            pulseTimer: 0
+        };
+        
+        fishingGame.clickWindow = 2000; // 2 seconds to click
+        document.getElementById('fishing-status').textContent = "🚨 BITE! Click the red fish quickly!";
+        
+        // Add some visual emphasis
+        fishingGame.canvas.style.border = "2px solid #ff0000";
+        setTimeout(() => {
+            if (fishingGame.canvas) {
+                fishingGame.canvas.style.border = "2px solid #4a90e2";
+            }
+        }, 500);
+    }
+
+    function updateAmbientFish() {
+        fishingGame.fish.forEach(fish => {
+            fish.x += fish.vx;
+            fish.y += fish.vy;
+            
+            // Bounce off edges
+            if (fish.x <= 0 || fish.x >= 400) fish.vx *= -1;
+            if (fish.y <= 120 || fish.y >= 280) fish.vy *= -1;
+            
+            // Keep in bounds
+            fish.x = Math.max(0, Math.min(400, fish.x));
+            fish.y = Math.max(120, Math.min(280, fish.y));
+        });
+    }
+
+    function drawFishingGame() {
+        const ctx = fishingGame.ctx;
+        const canvas = fishingGame.canvas;
+        
+        // Clear canvas
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        
+        // Draw water (already has CSS gradient background)
+        
+        // Draw riverbank
+        ctx.fillStyle = '#8B4513';
+        ctx.fillRect(0, 0, canvas.width, 100);
+        
+        // Draw grass on bank
+        ctx.fillStyle = '#228B22';
+        for (let i = 0; i < canvas.width; i += 8) {
+            ctx.fillRect(i, 90 + Math.random() * 10, 4, 15);
+        }
+        
+        // Draw player (pixelated style)
+        ctx.fillStyle = '#FF6B35';
+        ctx.fillRect(fishingGame.player.x, fishingGame.player.y, 16, 24);
+        
+        // Draw fishing rod
+        if (fishingGame.waitingForBite || fishingGame.activeFish) {
+            ctx.strokeStyle = '#8B4513';
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+            ctx.moveTo(fishingGame.player.x + 16, fishingGame.player.y + 8);
+            ctx.lineTo(fishingGame.fishingSpot.x, fishingGame.fishingSpot.y);
+            ctx.stroke();
+            
+            // Draw fishing line
+            ctx.strokeStyle = '#000000';
+            ctx.lineWidth = 1;
+            ctx.beginPath();
+            ctx.moveTo(fishingGame.fishingSpot.x, fishingGame.fishingSpot.y);
+            ctx.lineTo(fishingGame.fishingSpot.x, fishingGame.fishingSpot.y + 30);
+            ctx.stroke();
+        }
+        
+        // Draw ambient fish
+        fishingGame.fish.forEach(fish => {
+            drawPixelatedFish(ctx, fish.x, fish.y, fish.size, fish.color);
+        });
+        
+        // Draw active fish (if any)
+        if (fishingGame.activeFish) {
+            fishingGame.activeFish.pulseTimer += 16;
+            const pulse = Math.sin(fishingGame.activeFish.pulseTimer * 0.01) * 0.5 + 0.5;
+            const size = fishingGame.activeFish.size * (1 + pulse * 0.3);
+            
+            drawPixelatedFish(ctx, fishingGame.activeFish.x, fishingGame.activeFish.y, size, fishingGame.activeFish.color);
+            
+            // Draw exclamation mark
+            ctx.fillStyle = '#FFFF00';
+            ctx.font = '20px Arial';
+            ctx.textAlign = 'center';
+            ctx.fillText('!', fishingGame.activeFish.x, fishingGame.activeFish.y - 15);
+        }
+        
+        // Draw fishing spot indicator
+        if (fishingGame.waitingForBite && !fishingGame.activeFish) {
+            const ripple = Math.sin(fishingGame.gameTime * 0.01) * 3;
+            ctx.strokeStyle = '#FFFFFF';
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+            ctx.arc(fishingGame.fishingSpot.x, fishingGame.fishingSpot.y + 30, 8 + ripple, 0, Math.PI * 2);
+            ctx.stroke();
+        }
+    }
+
+    function drawPixelatedFish(ctx, x, y, size, color) {
+        // Draw pixelated fish
+        ctx.fillStyle = color;
+        
+        // Fish body (oval made of rectangles)
+        const bodyWidth = size;
+        const bodyHeight = size * 0.6;
+        
+        for (let i = 0; i < bodyWidth; i += 2) {
+            const height = Math.sin((i / bodyWidth) * Math.PI) * bodyHeight;
+            ctx.fillRect(x - bodyWidth/2 + i, y - height/2, 2, height);
+        }
+        
+        // Fish tail
+        ctx.fillRect(x - bodyWidth/2 - 4, y - 2, 4, 4);
+        
+        // Fish eye
+        ctx.fillStyle = '#000000';
+        ctx.fillRect(x + bodyWidth/4, y - 2, 2, 2);
+    }
+
+    function catchFish(fish) {
+        fishingGame.score++;
+        document.getElementById('fish-score').textContent = fishingGame.score;
+        
+        // Add fish to inventory
+        const fishName = `${fish.type.charAt(0).toUpperCase() + fish.type.slice(1)}`;
+        gameState.inventory.push({ name: fishName });
+        
+        // Determine fishing rod quality bonus
+        const isExpensiveRod = fishingGame.fishingRod.name.includes('Expensive');
+        const bonus = isExpensiveRod ? ' (Large!)' : '';
+        
+        document.getElementById('fishing-status').textContent = `Caught a ${fishName}${bonus}! Click for another spot.`;
+        
+        showNotification(`🐟 Caught a ${fishName}! Added to inventory.`);
+        
+        // Chance for fishing badge
+        if (fishingGame.score >= 3) {
+            earnBadge("Angler");
+        }
+        if (fishingGame.score >= 10) {
+            earnBadge("Master Fisherman");
+        }
+    }
+
+    function endFishingGame() {
+        fishingGame.active = false;
+        if (fishingGame.canvas) {
+            fishingGame.canvas.removeEventListener('click', handleFishingClick);
+        }
+        
+        // Final score message
+        if (fishingGame.score > 0) {
+            showNotification(`🎣 Fishing session complete! Caught ${fishingGame.score} fish.`);
+        }
+    }
+
+    // Close fishing game when modal closes
+    const originalCloseModal = function(modal) {
+        modal.style.display = 'none';
+        if (modal === modals.generic && fishingGame.active) {
+            endFishingGame();
+        }
+    };
 
     // --- MINIMAP FUNCTIONALITY ---
     function toggleMinimap() {
@@ -2181,6 +2894,11 @@ document.addEventListener('DOMContentLoaded', () => {
         // Draw tent if pitched
         if (gameState.world.tentPitched && gameState.world.tentLocation) {
             drawTent(ctx, scale, mapSize);
+        }
+
+        // Draw pony if hired
+        if (gameState.pony.hired) {
+            drawPony(ctx, scale, mapSize);
         }
 
         // Draw player (always last to be on top)
@@ -2305,6 +3023,37 @@ document.addEventListener('DOMContentLoaded', () => {
         ctx.fillText('⛺', tentX, tentY + 1);
     }
 
+    function drawPony(ctx, scale, mapSize) {
+        const centerX = mapSize / 2;
+        const centerY = mapSize / 2;
+        
+        // Pony is positioned near player
+        const ponyX = centerX + ((gameState.player.x + 15) * scale);
+        const ponyY = centerY + ((gameState.player.y + 15) * scale);
+
+        // Draw pony as a circle with horse emoji
+        ctx.fillStyle = '#8B4513'; // Brown
+        ctx.strokeStyle = '#ffffff';
+        ctx.lineWidth = 1;
+        
+        // Pony circle
+        ctx.beginPath();
+        ctx.arc(ponyX, ponyY, 4, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.stroke();
+
+        // Add pony symbol
+        ctx.fillStyle = '#ffffff';
+        ctx.font = '8px Arial';
+        ctx.textAlign = 'center';
+        ctx.fillText('🐴', ponyX, ponyY + 2);
+
+        // Add pony type label
+        ctx.fillStyle = '#ffffff';
+        ctx.font = '6px Arial';
+        ctx.fillText(gameState.pony.type.substr(0, 4), ponyX, ponyY - 8);
+    }
+
     function drawPlayer(ctx, scale, mapSize) {
         const centerX = mapSize / 2;
         const centerY = mapSize / 2;
@@ -2382,6 +3131,14 @@ document.addEventListener('DOMContentLoaded', () => {
     window.showMinimap = showMinimap;
     window.hideMinimap = hideMinimap;
     window.updateMinimap = updateMinimap;
+    
+    // Make pony functions global
+    window.hirePony = hirePony;
+    window.returnPony = returnPony;
+    
+    // Make fishing functions global
+    window.startFishingMinigame = startFishingMinigame;
+    window.endFishingGame = endFishingGame;
     
     // Make recipe functions global
     window.cookRecipe = (recipeIndex) => {

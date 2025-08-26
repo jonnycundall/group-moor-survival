@@ -565,3 +565,69 @@ button {
 .minimap.visible {
     display: block;
 }
+
+/* --- Fishing Game Styles --- */
+.fishing-game-container {
+    text-align: center;
+    padding: 10px;
+}
+
+#fishing-canvas {
+    display: block;
+    margin: 10px auto;
+    border-radius: 8px;
+    box-shadow: 0 4px 8px rgba(0,0,0,0.3);
+}
+
+.fishing-ui {
+    display: flex;
+    justify-content: space-around;
+    margin-top: 10px;
+    padding: 10px;
+    background: rgba(35, 57, 91, 0.1);
+    border-radius: 5px;
+    font-size: 14px;
+}
+
+.fishing-ui div {
+    color: var(--text-color);
+    font-weight: bold;
+}
+
+#fishing-status {
+    color: var(--accent-color) !important;
+    font-size: 16px;
+    margin-top: 10px;
+    min-height: 20px;
+}
+
+/* Pony selection styles */
+.pony-selection-container {
+    max-height: 400px;
+    overflow-y: auto;
+}
+
+.pony-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+    gap: 10px;
+    margin: 15px 0;
+}
+
+.pony-card {
+    text-align: center;
+    transition: transform 0.2s, box-shadow 0.2s;
+}
+
+.pony-card:not(.disabled):hover {
+    transform: translateY(-3px);
+    box-shadow: 0 6px 15px rgba(0,0,0,0.2);
+}
+
+.pony-card img {
+    transition: transform 0.2s;
+}
+
+.pony-card:not(.disabled):hover img {
+    transform: scale(1.05);
+}
