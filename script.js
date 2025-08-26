@@ -2151,8 +2151,27 @@ document.addEventListener('DOMContentLoaded', () => {
         };
 
         document.getElementById('phone-send').onclick = () => {
-             document.getElementById('phone-display').innerHTML = `<p>Photo sent... waiting for reply.</p>
-             <p><em>Reply: "Interesting sample! Looks like a common moorland specimen."</em></p>`;
+            // Array of different scientist responses
+            const scientistResponses = [
+                "Interesting sample! Looks like a common moorland specimen.",
+                "Fascinating! This appears to be a rare variant of Yorkshire fog grass - quite uncommon in this region!",
+                "I'm afraid the photo is too blurry to make a proper identification. Could you try taking another shot?",
+                "Excellent specimen! This looks like heather in full bloom - a classic moorland plant.",
+                "The lighting in this photo makes it difficult to see the details. A clearer image would help with identification.",
+                "Remarkable! This could be a rare bog orchid - we haven't seen one in this area for years!",
+                "The image quality is poor and the subject is out of focus. Please retake with better lighting.",
+                "This appears to be common gorse - beautiful yellow flowers but quite typical for the moors.",
+                "Intriguing! The leaf structure suggests this might be a protected species of marsh violet.",
+                "The photo is underexposed and I can't make out the key identifying features. Try again in better light.",
+                "Wonderful! This looks like purple moor grass - an important indicator species for healthy moorland.",
+                "The image is too distant and pixelated for proper analysis. Get closer to your subject next time!"
+            ];
+            
+            // Randomly select a response
+            const randomResponse = scientistResponses[Math.floor(Math.random() * scientistResponses.length)];
+            
+            document.getElementById('phone-display').innerHTML = `<p>Photo sent... waiting for reply.</p>
+             <p><em>Reply: "${randomResponse}"</em></p>`;
         };
         
         document.getElementById('phone-comic').onclick = () => {
