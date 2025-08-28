@@ -158,6 +158,9 @@ document.addEventListener('DOMContentLoaded', () => {
         { name: 'Instant Noodles', price: 1, type: 'food' }, { name: 'Canned Beans', price: 2, type: 'food' },
         { name: 'Sandwich', price: 4, type: 'food' }, { name: 'Yogurt', price: 2, type: 'food' },
         { name: 'Bananas', price: 1, type: 'food' }, { name: 'Orange Juice', price: 3, type: 'food' },
+        // Seeds for planting
+        { name: 'Apple Tree Seeds', price: 5, type: 'seeds' }, { name: 'Pear Tree Seeds', price: 6, type: 'seeds' },
+        { name: 'Pumpkin Seeds', price: 3, type: 'seeds' },
         // ASDA gear items
         { name: 'Camping Stove', price: 25, type: 'gear' }, { name: 'Sleeping Bag', price: 40, type: 'gear' },
         { name: 'Flashlight', price: 15, type: 'gear' }, { name: 'Water Bottle', price: 8, type: 'gear' },
@@ -187,8 +190,40 @@ document.addEventListener('DOMContentLoaded', () => {
         'Sandwich': '🥪',
         'Yogurt': '🥛',
         'Bananas': '🍌',
-        'Orange Juice': '🧃'
+        'Orange Juice': '🧃',
+        // Seeds and crops
+        'Apple Tree Seeds': '🌱',
+        'Pear Tree Seeds': '🌱',
+        'Pumpkin Seeds': '🌱',
+        'Pear': '🍐',
+        'Pumpkin': '🎃',
+        // Wild edible plants
+        'Bilberry': '🫐',
+        'Wood Sorrel': '🍀'
     };
+
+    // Wild edible plants configuration
+    const WILD_PLANTS = {
+        'Bilberry': {
+            image: 'public/images/plants/bilberry.png',
+            hungerValue: 15,
+            rarity: 0.3, // 30% chance per spawn attempt
+            minDistance: 50, // Minimum distance between plants
+            preferredTerrain: ['forest', 'hills'], // Where they spawn more commonly
+            description: 'Sweet wild berries rich in antioxidants'
+        },
+        'Wood Sorrel': {
+            image: 'public/images/plants/woodsorrel.png',
+            hungerValue: 10,
+            rarity: 0.4, // 40% chance per spawn attempt
+            minDistance: 30,
+            preferredTerrain: ['forest', 'valley'], 
+            description: 'Tangy leaves with a lemony flavor'
+        }
+    };
+
+    // Wild plants tracking
+    let wildPlants = [];
     
     // Pony hire system
     const PONIES = [
@@ -323,6 +358,7 @@ document.addEventListener('DOMContentLoaded', () => {
         { name: "The Cave", x: 200, y: -500, radius: 40 },
         { name: "ASDA", x: -600, y: -600, radius: 30 },
         { name: "Pony Farm", x: 400, y: 600, radius: 40 },
+        { name: "Market Farm", x: -300, y: 400, radius: 50 },
     ];
     const SEASONS = { 1: 'Spring', 2: 'Summer', 3: 'Autumn', 4: 'Winter' };
 
@@ -356,7 +392,7 @@ document.addEventListener('DOMContentLoaded', () => {
             console.log("Scene created");
             
             // Create camera (first-person)
-            camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 2000);
+            camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 10000);
             camera.position.set(0, 10, 0); // First-person height
             console.log("Camera created");
             
@@ -372,6 +408,7 @@ document.addEventListener('DOMContentLoaded', () => {
             renderer.shadowMap.enabled = true;
             renderer.shadowMap.type = THREE.PCFSoftShadowMap;
             renderer.autoClear = false; // We'll handle clearing manually with our sky dome
+            renderer.setClearColor(0x000000, 0); // Transparent black to allow sky dome
             console.log("Renderer created");
             
             // Add lights
@@ -395,6 +432,10 @@ document.addEventListener('DOMContentLoaded', () => {
             // Create terrain
             createTerrain();
             console.log("Terrain created");
+            
+            // Initialize treasure hunt clues (so they're always available)
+            initializeTreasureHunt();
+            console.log("Treasure hunt initialized");
             
             // Create player representation
             createPlayer3D();
@@ -466,11 +507,11 @@ document.addEventListener('DOMContentLoaded', () => {
             height += Math.sin(x * 0.05) * 3 + Math.cos(z * 0.05) * 2;
             // Remove random variation to ensure getTerrainHeight() matches actual terrain
             
-            // Create river valley - lower terrain along river path
+            // Create river valley - lower terrain along river path with wider valley for the larger river
             const riverX = -200;
             const riverDistanceFromCenter = Math.abs(x - riverX);
-            if (riverDistanceFromCenter < 150) {
-                const riverDepth = (150 - riverDistanceFromCenter) / 150;
+            if (riverDistanceFromCenter < 200) { // Increased from 150 to 200 for wider river valley
+                const riverDepth = (200 - riverDistanceFromCenter) / 200; // Updated calculation
                 height -= riverDepth * riverDepth * 25; // Gradual valley
             }
             
@@ -602,6 +643,8 @@ document.addEventListener('DOMContentLoaded', () => {
         // Add terrain features
         addMoorlandFeatures();
         createRiverSystem();
+        createWildPlants();
+        createMarketFarm();
     }
     
     function addMoorlandFeatures() {
@@ -687,8 +730,8 @@ document.addEventListener('DOMContentLoaded', () => {
             const x = (Math.random() - 0.5) * terrainSize * 0.7;
             const z = (Math.random() - 0.5) * terrainSize * 0.7;
             
-            // Avoid placing trees in river valley
-            if (Math.abs(x + 200) > 100) {
+            // Avoid placing trees in river valley - updated for wider river
+            if (Math.abs(x + 200) > 120) { // Increased from 100 to 120 to avoid wider river valley
                 tree.position.set(
                     x,
                     getTerrainHeight(x, z) + 7,
@@ -703,21 +746,32 @@ document.addEventListener('DOMContentLoaded', () => {
     function createRiverSystem() {
         // Create the main river flowing through the valley
         const riverPath = [];
-        const riverWidth = 20;
+        const baseRiverWidth = 35; // Increased base width from 20 to 35
         
-        // Generate river path from north to south with curves
+        // Generate river path from north to south with curves and variable width
         for (let z = -800; z <= 800; z += 10) {
             const x = -200 + Math.sin(z * 0.003) * 30; // Meandering river
-            riverPath.push(new THREE.Vector3(x, getTerrainHeight(x, z) - 2, z));
+            
+            // Calculate variable width based on position and noise
+            const widthVariation = Math.sin(z * 0.002) * 15 + Math.sin(z * 0.008) * 8; // Two sine waves for natural variation
+            const currentWidth = baseRiverWidth + widthVariation + (Math.random() - 0.5) * 10; // Add some randomness
+            
+            riverPath.push({
+                position: new THREE.Vector3(x, getTerrainHeight(x, z) - 2, z),
+                width: Math.max(20, currentWidth) // Ensure minimum width of 20
+            });
         }
         
-        // Create river segments
+        // Create river segments with variable widths
         for (let i = 0; i < riverPath.length - 1; i++) {
             const start = riverPath[i];
             const end = riverPath[i + 1];
-            const length = start.distanceTo(end);
+            const length = start.position.distanceTo(end.position);
             
-            const riverGeometry = new THREE.PlaneGeometry(riverWidth, length);
+            // Use average width between start and end points
+            const segmentWidth = (start.width + end.width) / 2;
+            
+            const riverGeometry = new THREE.PlaneGeometry(segmentWidth, length);
             const riverMaterial = new THREE.MeshLambertMaterial({ 
                 color: 0x4169E1, 
                 transparent: true, 
@@ -725,24 +779,24 @@ document.addEventListener('DOMContentLoaded', () => {
             });
             
             const riverSegment = new THREE.Mesh(riverGeometry, riverMaterial);
-            riverSegment.position.copy(start).lerp(end, 0.5);
+            riverSegment.position.copy(start.position).lerp(end.position, 0.5);
             riverSegment.rotation.x = -Math.PI / 2;
-            riverSegment.rotation.z = Math.atan2(end.z - start.z, end.x - start.x);
+            riverSegment.rotation.z = Math.atan2(end.position.z - start.position.z, end.position.x - start.position.x);
             scene.add(riverSegment);
         }
         
         // Create waterfall
         createWaterfall();
         
-        // Add some river rocks
-        for (let i = 0; i < 30; i++) {
+        // Add some river rocks - spread them over the wider river area
+        for (let i = 0; i < 45; i++) { // Increased from 30 to 45 rocks for wider river
             const rockGeometry = new THREE.SphereGeometry(1 + Math.random() * 2, 6, 4);
             const rockMaterial = new THREE.MeshLambertMaterial({ color: 0x555555 });
             const rock = new THREE.Mesh(rockGeometry, rockMaterial);
             
             const riverZ = (Math.random() - 0.5) * 1600;
             const riverX = -200 + Math.sin(riverZ * 0.003) * 30;
-            const offsetX = (Math.random() - 0.5) * 40;
+            const offsetX = (Math.random() - 0.5) * 70; // Increased spread from 40 to 70 for wider river
             
             rock.position.set(
                 riverX + offsetX,
@@ -892,6 +946,257 @@ document.addEventListener('DOMContentLoaded', () => {
             cliffRock.rotation.x = (Math.random() - 0.5) * 0.4;
             scene.add(cliffRock);
         }
+    }
+    
+    function createWildPlants() {
+        console.log("Creating wild edible plants...");
+        
+        // Clear existing wild plants
+        wildPlants = [];
+        
+        const plantNames = Object.keys(WILD_PLANTS);
+        const totalPlants = 150; // Number of plants to scatter
+        let plantsCreated = 0;
+        
+        for (let attempt = 0; attempt < totalPlants * 3 && plantsCreated < totalPlants; attempt++) {
+            // Random position on the map
+            const x = (Math.random() - 0.5) * terrainSize * 0.8;
+            const z = (Math.random() - 0.5) * terrainSize * 0.8;
+            
+            // Skip if too close to river or cave
+            if (Math.abs(x + 200) < 100 || (Math.abs(x - 200) < 50 && Math.abs(z + 500) < 50)) {
+                continue;
+            }
+            
+            // Choose plant type
+            const plantName = plantNames[Math.floor(Math.random() * plantNames.length)];
+            const plantConfig = WILD_PLANTS[plantName];
+            
+            // Check rarity
+            if (Math.random() > plantConfig.rarity) {
+                continue;
+            }
+            
+            // Check minimum distance from other plants
+            const tooClose = wildPlants.some(plant => {
+                const dist = Math.sqrt((plant.x - x) * (plant.x - x) + (plant.z - z) * (plant.z - z));
+                return dist < plantConfig.minDistance;
+            });
+            
+            if (tooClose) continue;
+            
+            // Create the plant
+            createWildPlant(plantName, x, z);
+            plantsCreated++;
+        }
+        
+        console.log(`Created ${plantsCreated} wild plants`);
+    }
+    
+    function createWildPlant(plantName, x, z) {
+        const plantConfig = WILD_PLANTS[plantName];
+        const y = getTerrainHeight(x, z);
+        
+        // Create a billboard sprite for the plant using image texture
+        const textureLoader = new THREE.TextureLoader();
+        const plantTexture = textureLoader.load(plantConfig.image);
+        
+        const plantMaterial = new THREE.SpriteMaterial({ 
+            map: plantTexture,
+            transparent: true,
+            alphaTest: 0.1
+        });
+        
+        const plantSprite = new THREE.Sprite(plantMaterial);
+        plantSprite.scale.set(8, 8, 1); // Adjust size as needed
+        plantSprite.position.set(x, y + 4, z); // Slightly above ground
+        
+        // Add a subtle glow for visibility
+        const glowGeometry = new THREE.CircleGeometry(2, 8);
+        const glowMaterial = new THREE.MeshBasicMaterial({ 
+            color: 0x90EE90, 
+            transparent: true, 
+            opacity: 0.3 
+        });
+        const glow = new THREE.Mesh(glowGeometry, glowMaterial);
+        glow.rotation.x = -Math.PI / 2;
+        glow.position.set(x, y + 0.1, z);
+        
+        scene.add(plantSprite);
+        scene.add(glow);
+        
+        // Store plant data
+        const plantData = {
+            name: plantName,
+            x: x,
+            z: z,
+            y: y,
+            sprite: plantSprite,
+            glow: glow,
+            hungerValue: plantConfig.hungerValue,
+            description: plantConfig.description
+        };
+        
+        wildPlants.push(plantData);
+    }
+    
+    function createMarketFarm() {
+        console.log("Creating Market Farm...");
+        
+        const farmLocation = WORLD_LOCATIONS.find(loc => loc.name === "Market Farm");
+        if (!farmLocation) {
+            console.log("ERROR: Market Farm location not found in WORLD_LOCATIONS!");
+            return;
+        }
+        
+        console.log("Found Market Farm location:", farmLocation);
+        
+        const farmX = farmLocation.x;
+        const farmZ = farmLocation.y; // Note: WORLD_LOCATIONS uses 'y' for what becomes 'z' in 3D
+        const farmY = getTerrainHeight(farmX, farmZ);
+        
+        console.log(`Market Farm coordinates: X=${farmX}, Y=${farmY}, Z=${farmZ}`);
+        
+        // Create main farmhouse
+        const houseWidth = 20;
+        const houseDepth = 25;
+        const houseHeight = 12;
+        const roofHeight = 8;
+        
+        // House walls
+        const wallGeometry = new THREE.BoxGeometry(houseWidth, houseHeight, houseDepth);
+        const wallMaterial = new THREE.MeshLambertMaterial({ color: 0x8B4513 }); // Brown wood
+        const farmhouse = new THREE.Mesh(wallGeometry, wallMaterial);
+        farmhouse.position.set(farmX, farmY + houseHeight/2, farmZ);
+        scene.add(farmhouse);
+        
+        // Pitched roof
+        const roofGeometry = new THREE.ConeGeometry(houseWidth * 0.8, roofHeight, 4);
+        const roofMaterial = new THREE.MeshLambertMaterial({ color: 0x654321 }); // Dark brown
+        const roof = new THREE.Mesh(roofGeometry, roofMaterial);
+        roof.position.set(farmX, farmY + houseHeight + roofHeight/2, farmZ);
+        roof.rotation.y = Math.PI / 4; // Diamond shape for pitched roof
+        scene.add(roof);
+        
+        // Chimney
+        const chimneyGeometry = new THREE.BoxGeometry(2, 6, 2);
+        const chimneyMaterial = new THREE.MeshLambertMaterial({ color: 0x666666 }); // Gray stone
+        const chimney = new THREE.Mesh(chimneyGeometry, chimneyMaterial);
+        chimney.position.set(farmX - 6, farmY + houseHeight + 3, farmZ - 8);
+        scene.add(chimney);
+        
+        // Door
+        const doorGeometry = new THREE.BoxGeometry(3, 8, 0.5);
+        const doorMaterial = new THREE.MeshLambertMaterial({ color: 0x4A4A4A }); // Dark gray
+        const door = new THREE.Mesh(doorGeometry, doorMaterial);
+        door.position.set(farmX + houseWidth/2 + 0.2, farmY + 4, farmZ);
+        scene.add(door);
+        
+        // Windows
+        const windowGeometry = new THREE.BoxGeometry(3, 3, 0.5);
+        const windowMaterial = new THREE.MeshLambertMaterial({ color: 0x87CEEB }); // Sky blue glass
+        
+        // Front windows
+        const window1 = new THREE.Mesh(windowGeometry, windowMaterial);
+        window1.position.set(farmX + houseWidth/2 + 0.2, farmY + 7, farmZ - 6);
+        scene.add(window1);
+        
+        const window2 = new THREE.Mesh(windowGeometry, windowMaterial);
+        window2.position.set(farmX + houseWidth/2 + 0.2, farmY + 7, farmZ + 6);
+        scene.add(window2);
+        
+        // Side windows
+        const window3 = new THREE.Mesh(windowGeometry, windowMaterial);
+        window3.position.set(farmX - 6, farmY + 7, farmZ + houseDepth/2 + 0.2);
+        window3.rotation.y = Math.PI / 2;
+        scene.add(window3);
+        
+        const window4 = new THREE.Mesh(windowGeometry, windowMaterial);
+        window4.position.set(farmX + 6, farmY + 7, farmZ + houseDepth/2 + 0.2);
+        window4.rotation.y = Math.PI / 2;
+        scene.add(window4);
+        
+        // Fenced enclosure
+        const fenceHeight = 3;
+        const fencePostGeometry = new THREE.BoxGeometry(0.5, fenceHeight, 0.5);
+        const fenceRailGeometry = new THREE.BoxGeometry(8, 0.3, 0.3);
+        const fenceMaterial = new THREE.MeshLambertMaterial({ color: 0x8B4513 }); // Brown wood
+        
+        // Create fence around the farm
+        const fencePositions = [
+            // Back fence
+            { x: farmX - 25, z: farmZ - 15, rotation: 0 },
+            { x: farmX - 17, z: farmZ - 15, rotation: 0 },
+            { x: farmX - 9, z: farmZ - 15, rotation: 0 },
+            { x: farmX - 1, z: farmZ - 15, rotation: 0 },
+            { x: farmX + 7, z: farmZ - 15, rotation: 0 },
+            { x: farmX + 15, z: farmZ - 15, rotation: 0 },
+            
+            // Left fence
+            { x: farmX - 25, z: farmZ - 7, rotation: Math.PI / 2 },
+            { x: farmX - 25, z: farmZ + 1, rotation: Math.PI / 2 },
+            { x: farmX - 25, z: farmZ + 9, rotation: Math.PI / 2 },
+            
+            // Right fence  
+            { x: farmX + 15, z: farmZ - 7, rotation: Math.PI / 2 },
+            { x: farmX + 15, z: farmZ + 1, rotation: Math.PI / 2 },
+            { x: farmX + 15, z: farmZ + 9, rotation: Math.PI / 2 },
+        ];
+        
+        fencePositions.forEach(pos => {
+            // Fence post
+            const post = new THREE.Mesh(fencePostGeometry, fenceMaterial);
+            post.position.set(pos.x, farmY + fenceHeight/2, pos.z);
+            scene.add(post);
+            
+            // Fence rails
+            const rail1 = new THREE.Mesh(fenceRailGeometry, fenceMaterial);
+            rail1.position.set(pos.x, farmY + 1, pos.z);
+            rail1.rotation.y = pos.rotation;
+            scene.add(rail1);
+            
+            const rail2 = new THREE.Mesh(fenceRailGeometry, fenceMaterial);
+            rail2.position.set(pos.x, farmY + 2.5, pos.z);
+            rail2.rotation.y = pos.rotation;
+            scene.add(rail2);
+        });
+        
+        // Add some farm animals/decorations in the enclosure
+        const hayBaleGeometry = new THREE.CylinderGeometry(2, 2, 1.5, 8);
+        const hayMaterial = new THREE.MeshLambertMaterial({ color: 0xDAA520 }); // Golden yellow
+        
+        const hayBale1 = new THREE.Mesh(hayBaleGeometry, hayMaterial);
+        hayBale1.position.set(farmX - 20, farmY + 0.75, farmZ - 10);
+        hayBale1.rotation.z = Math.PI / 2;
+        scene.add(hayBale1);
+        
+        const hayBale2 = new THREE.Mesh(hayBaleGeometry, hayMaterial);
+        hayBale2.position.set(farmX - 15, farmY + 0.75, farmZ - 5);
+        hayBale2.rotation.z = Math.PI / 2;
+        scene.add(hayBale2);
+        
+        // Farm sign
+        const signPostGeometry = new THREE.BoxGeometry(0.5, 6, 0.5);
+        const signGeometry = new THREE.BoxGeometry(8, 3, 0.2);
+        const signMaterial = new THREE.MeshLambertMaterial({ color: 0x8B4513 });
+        
+        const signPost = new THREE.Mesh(signPostGeometry, signMaterial);
+        signPost.position.set(farmX + 20, farmY + 3, farmZ + 20);
+        scene.add(signPost);
+        
+        const sign = new THREE.Mesh(signGeometry, signMaterial);
+        sign.position.set(farmX + 20, farmY + 5, farmZ + 20);
+        scene.add(sign);
+        
+        // Store farm reference
+        marketFarm = {
+            building: farmhouse,
+            x: farmX,
+            z: farmZ,
+            y: farmY
+        };
+        
+        console.log(`Market Farm created at (${farmX}, ${farmZ})`);
     }
     
     function createPlayer3D() {
@@ -1129,6 +1434,7 @@ document.addEventListener('DOMContentLoaded', () => {
     
     // Global cave state
     let caveEntrance = null;
+    let marketFarm = null;
     let insideCave = false;
     let caveInteriorObjects = [];
     
@@ -1258,12 +1564,14 @@ document.addEventListener('DOMContentLoaded', () => {
     function checkCaveEntrance() {
         if (!caveEntrance) return;
         
-        const playerX = gameState.player.x;
-        const playerZ = gameState.player.y; // Note: gameState.player.y is actually Z coordinate
+        const playerX = camera.position.x; // Use camera position instead
+        const playerZ = camera.position.z; // Use camera position instead
         const caveX = 200;
         const caveZ = -500;
         
         const distance = Math.sqrt((playerX - caveX) * (playerX - caveX) + (playerZ - caveZ) * (playerZ - caveZ));
+        
+        console.log(`Cave entrance check - Player: (${playerX.toFixed(1)}, ${playerZ.toFixed(1)}), Distance: ${distance.toFixed(1)}, Inside Cave: ${insideCave}`);
         
         // If player is approaching the cave entrance area
         if (distance < 30 && distance > 20) {
@@ -1282,7 +1590,22 @@ document.addEventListener('DOMContentLoaded', () => {
             if (playerHeight < outsideHeight - 10) {
                 enterCave();
             }
-        } else if (insideCave && (distance > 35 || getTerrainHeight(playerX, playerZ) > getTerrainHeight(caveX + 50, caveZ) - 5)) {
+        }
+        
+        // Manual cave entry trigger - if very close to cave center, allow forced entry
+        if (distance < 15 && !insideCave) {
+            console.log("Very close to cave center - ready for forced entry. Press 'C' to enter cave.");
+            showNotification("Press 'C' to enter the cave", '#FFD700');
+            
+            // Check for 'C' key press to force cave entry
+            if (keysPressed['c']) {
+                console.log("Forcing cave entry...");
+                enterCave();
+                keysPressed['c'] = false; // Prevent repeated triggering
+            }
+        }
+        
+        if (insideCave && (distance > 35 || getTerrainHeight(playerX, playerZ) > getTerrainHeight(caveX + 50, caveZ) - 5)) {
             // Exit cave if player moves far away OR climbs back up to normal terrain level
             exitCave();
         }
@@ -1328,6 +1651,7 @@ document.addEventListener('DOMContentLoaded', () => {
         
         // Create cave interior
         createCaveInterior();
+        console.log("Cave interior created. Treasure hunt clue boxes:", treasureHunt.clueBoxes.length);
         
         // Show cave entered message
         const message = document.createElement('div');
@@ -1342,12 +1666,12 @@ document.addEventListener('DOMContentLoaded', () => {
         message.style.fontSize = '18px';
         message.style.textAlign = 'center';
         message.style.zIndex = '1000';
-        message.innerHTML = '🔦 You have entered the cave!<br>Move around to explore the dark interior...';
+        message.innerHTML = '🔦 You have entered the mysterious cave!<br>Move around to explore the dark interior...<br>💰 Legend speaks of ancient treasure hidden within!';
         document.body.appendChild(message);
         
         setTimeout(() => {
             document.body.removeChild(message);
-        }, 3000);
+        }, 4000); // Show for 4 seconds instead of 3
     }
     
     function exitCave() {
@@ -1506,8 +1830,22 @@ document.addEventListener('DOMContentLoaded', () => {
         scene.add(cavePool);
         caveInteriorObjects.push(cavePool);
         
-        // Create the first treasure clue box in the cave
-        createTreasureClueBox('cave_clue', caveX + 8, caveY - 10, caveZ - 20);
+        console.log("Cave interior created with pool and lighting");
+    }
+    
+    // Initialize treasure hunt clues when the world is created
+    function initializeTreasureHunt() {
+        // Create the cave treasure clue immediately (always visible)
+        const caveX = 200;
+        const caveZ = -500;
+        const caveY = getTerrainHeight(caveX, caveZ);
+        
+        console.log(`Creating cave treasure clue at (${caveX}, ${caveY - 8}, ${caveZ - 10})`);
+        createTreasureClueBox('cave_clue', caveX, caveY - 8, caveZ - 10);
+        
+        // Create other treasure clues around the world
+        createTreasureClueBox('forest_clue', -100, getTerrainHeight(-100, 100), 100);
+        createTreasureClueBox('mountain_clue', 300, getTerrainHeight(300, -200), -200);
     }
     
     // Treasure Hunt System
@@ -1515,8 +1853,9 @@ document.addEventListener('DOMContentLoaded', () => {
         const clue = TREASURE_CLUES.find(c => c.id === clueId);
         if (!clue) return;
         
-        // Create ornate treasure box
-        const boxGeometry = new THREE.BoxGeometry(3, 2, 4);
+        // Create ornate treasure box - make it larger and more visible for cave
+        const boxSize = clueId === 'cave_clue' ? 4 : 3; // Larger for cave visibility
+        const boxGeometry = new THREE.BoxGeometry(boxSize, boxSize * 0.8, boxSize * 1.2);
         const boxMaterial = new THREE.MeshLambertMaterial({ 
             color: 0x8B4513, // Brown wood color
             emissive: 0x2F1B14
@@ -1539,11 +1878,24 @@ document.addEventListener('DOMContentLoaded', () => {
         
         scene.add(clueBox);
         
-        // Add glowing effect
-        const glowLight = new THREE.PointLight(0xFFD700, 0.5, 15);
+        // Add stronger glowing effect for cave visibility
+        const glowLight = new THREE.PointLight(0xFFD700, 1.5, 30); // Even brighter and wider range
         glowLight.position.copy(clueBox.position);
         glowLight.position.y += 3;
         scene.add(glowLight);
+        
+        // Add pulsing effect for cave clue
+        if (clueId === 'cave_clue') {
+            glowLight.userData = { 
+                originalIntensity: 1.5, 
+                pulseTime: 0,
+                isPulsing: true 
+            };
+        }
+        
+        // Add ambient glow material to the box itself
+        clueBox.material.emissive = new THREE.Color(clueId === 'cave_clue' ? 0x6A6A00 : 0x4A4A00); // Brighter for cave
+        trim.material.emissive = new THREE.Color(clueId === 'cave_clue' ? 0x888800 : 0x666600); // Stronger gold glow for cave
         
         // Store references
         treasureHunt.clueBoxes.push({
@@ -1710,9 +2062,68 @@ document.addEventListener('DOMContentLoaded', () => {
         console.log(`Created treasure chest at (${chestX}, ${chestY}, ${chestZ})`);
     }
     
+    function checkWildPlantInteraction() {
+        if (wildPlants.length === 0) return;
+        
+        const playerX = camera.position.x;
+        const playerZ = camera.position.z;
+        
+        wildPlants.forEach((plant, index) => {
+            const distance = Math.sqrt(
+                (playerX - plant.x) * (playerX - plant.x) + 
+                (playerZ - plant.z) * (playerZ - plant.z)
+            );
+            
+            // Show interaction hint when close
+            if (distance < 8) {
+                const emoji = FOOD_EMOJIS[plant.name] || '🌿';
+                showNotification(`${emoji} ${plant.name} - Press E to pick`, '#90EE90');
+                
+                // Pick plant when E is pressed
+                if (keysPressed['e']) {
+                    pickWildPlant(index);
+                    keysPressed['e'] = false; // Prevent repeated picking
+                }
+            }
+        });
+    }
+    
+    function pickWildPlant(plantIndex) {
+        const plant = wildPlants[plantIndex];
+        if (!plant) return;
+        
+        // Add to inventory
+        const emoji = FOOD_EMOJIS[plant.name] || '🌿';
+        gameState.inventory.push({
+            name: plant.name,
+            type: 'food',
+            hungerValue: plant.hungerValue,
+            description: plant.description
+        });
+        
+        // Remove from scene
+        scene.remove(plant.sprite);
+        scene.remove(plant.glow);
+        
+        // Remove from array
+        wildPlants.splice(plantIndex, 1);
+        
+        // Show notification
+        showNotification(`${emoji} Picked ${plant.name}! (+${plant.hungerValue} hunger when eaten)`, '#90EE90');
+        console.log(`Picked wild plant: ${plant.name}`);
+        
+        // Update inventory display if open
+        if (document.getElementById('inventory-modal')?.style.display === 'block') {
+            showInventory();
+        }
+    }
+    
     function checkTreasureHuntInteraction() {
-        const playerX = gameState.player.x;
-        const playerZ = gameState.player.y;
+        const playerX = camera.position.x; // Use camera position instead of gameState
+        const playerZ = camera.position.z; // Use camera position instead of gameState
+        
+        console.log(`Player position: (${playerX.toFixed(1)}, ${camera.position.y.toFixed(1)}, ${playerZ.toFixed(1)})`);
+        console.log(`Available clue boxes: ${treasureHunt.clueBoxes.length}`);
         
         // Check for clue box interactions
         treasureHunt.clueBoxes.forEach(clueBoxData => {
@@ -1722,8 +2133,27 @@ document.addEventListener('DOMContentLoaded', () => {
                 (playerZ - box.position.z) * (playerZ - box.position.z)
             );
             
+            if (clueBoxData.clueId === 'cave_clue') {
+                console.log(`Cave clue box at (${box.position.x.toFixed(1)}, ${box.position.y.toFixed(1)}, ${box.position.z.toFixed(1)}), distance: ${distance.toFixed(1)}`);
+            }
+            
+            // Show proximity notification when close but not yet triggered
+            if (distance < 15 && distance >= 8 && !treasureHunt.cluesFound.includes(clueBoxData.clueId)) {
+                if (!window.treasureProximityShown || window.treasureProximityShown !== clueBoxData.clueId) {
+                    showNotification(`✨ You sense something valuable nearby... Move closer to the glowing chest!`);
+                    window.treasureProximityShown = clueBoxData.clueId;
+                    console.log(`Showing proximity notification for ${clueBoxData.clueId}`);
+                }
+            } else if (distance >= 15) {
+                if (window.treasureProximityShown === clueBoxData.clueId) {
+                    window.treasureProximityShown = null;
+                }
+            }
+            
+            // Trigger clue when very close
             if (distance < 8 && !treasureHunt.cluesFound.includes(clueBoxData.clueId)) {
                 showTreasureClueMessage(clueBoxData.clueId);
+                console.log(`Triggering treasure clue for ${clueBoxData.clueId}`);
             }
         });
         
@@ -1978,6 +2408,425 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     };
 
+    // --- MARKET FARM SELLING SYSTEM ---
+    
+    function checkMarketFarmInteraction() {
+        if (!marketFarm) {
+            console.log("Market Farm not found - marketFarm is null");
+            return;
+        }
+        
+        const playerX = camera.position.x;
+        const playerZ = camera.position.z;
+        
+        const distance = Math.sqrt(
+            Math.pow(playerX - marketFarm.x, 2) + 
+            Math.pow(playerZ - marketFarm.z, 2)
+        );
+        
+        console.log(`Player: (${playerX.toFixed(1)}, ${playerZ.toFixed(1)}), Farm: (${marketFarm.x}, ${marketFarm.z}), Distance: ${distance.toFixed(1)}`);
+        
+        // If player is close to Market Farm (within interaction range)
+        if (distance < 40) {
+            // Show interaction prompt
+            if (!window.farmPromptShown) {
+                showNotification("🚜 Press [Enter] to sell items at Market Farm", '#DAA520');
+                window.farmPromptShown = true;
+            }
+            
+            // Check for Enter key press
+            if (keysPressed['enter']) {
+                openMarketFarmShop();
+                keysPressed['enter'] = false; // Prevent repeated opening
+            }
+        } else {
+            window.farmPromptShown = false;
+        }
+    }
+    
+    function openMarketFarmShop() {
+        // Get sellable items from inventory
+        const sellableItems = gameState.inventory.filter(item => {
+            // Can sell wild plants, fish, and harvested crops
+            const isWildPlant = WILD_PLANTS.hasOwnProperty(item.name);
+            const isFish = ['Trout', 'Salmon', 'Pike', 'Perch'].includes(item.name);
+            const isHarvestedCrop = ['Pear', 'Pumpkin'].includes(item.name);
+            return isWildPlant || isFish || isHarvestedCrop;
+        });
+        
+        // Create farm selling modal
+        const farmModal = document.createElement('div');
+        farmModal.style.cssText = `
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.8);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 1000;
+        `;
+        
+        const farmContent = document.createElement('div');
+        farmContent.style.cssText = `
+            background: #8B4513;
+            color: white;
+            padding: 30px;
+            border-radius: 15px;
+            max-width: 600px;
+            max-height: 80vh;
+            overflow-y: auto;
+            border: 3px solid #654321;
+        `;
+        
+        let farmHTML = `
+            <h2 style="text-align: center; margin-bottom: 20px; color: #FFD700;">🚜 Market Farm 🚜</h2>
+            <p style="text-align: center; margin-bottom: 20px; font-size: 18px;">Current Money: £${gameState.budget.toFixed(2)}</p>
+            <h3 style="color: #90EE90;">Sell Your Items:</h3>
+        `;
+        
+        if (sellableItems.length === 0) {
+            farmHTML += `
+                <p style="text-align: center; font-style: italic; color: #FFB6C1;">
+                    You don't have any items to sell right now.<br>
+                    Come back with wild plants, fish, or harvested crops!
+                </p>
+            `;
+        } else {
+            farmHTML += '<div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px; margin: 20px 0;">';
+            
+            sellableItems.forEach((item, index) => {
+                const emoji = FOOD_EMOJIS[item.name] || '🌿';
+                const price = getSellPrice(item.name);
+                const description = getItemDescription(item.name);
+                
+                farmHTML += `
+                    <div style="
+                        background: #654321; 
+                        padding: 15px; 
+                        margin: 10px 0; 
+                        border-radius: 10px; 
+                        cursor: pointer; 
+                        border: 2px solid #DAA520;
+                        text-align: center;
+                    ">
+                        <div style="font-size: 32px; margin-bottom: 8px;">${emoji}</div>
+                        <div style="font-size: 16px; font-weight: bold; margin-bottom: 5px;">${item.name}</div>
+                        <div style="font-size: 14px; color: #FFB6C1; margin-bottom: 8px;">${description}</div>
+                        <div style="font-size: 18px; color: #90EE90; font-weight: bold; margin-bottom: 10px;">£${price}</div>
+                        <button onclick="sellItem('${item.name}')" style="
+                            background: #4CAF50; 
+                            color: white; 
+                            border: none; 
+                            padding: 8px 16px; 
+                            border-radius: 5px; 
+                            cursor: pointer;
+                            font-size: 14px;
+                        ">Sell</button>
+                    </div>
+                `;
+            });
+            
+            farmHTML += '</div>';
+        }
+        
+        farmHTML += `
+            <div style="text-align: center; margin-top: 25px;">
+                <button onclick="closeMarketFarmShop()" style="
+                    background: #DC143C; 
+                    color: white; 
+                    border: none; 
+                    padding: 12px 24px; 
+                    border-radius: 8px; 
+                    cursor: pointer; 
+                    font-size: 16px;
+                ">Close</button>
+            </div>
+        `;
+        
+        farmContent.innerHTML = farmHTML;
+        farmModal.appendChild(farmContent);
+        document.body.appendChild(farmModal);
+        
+        // Store reference for closing
+        window.currentFarmModal = farmModal;
+    }
+    
+    function getSellPrice(itemName) {
+        const prices = {
+            // Wild plants
+            'Bilberry': 3.50,
+            'Wood Sorrel': 2.00,
+            // Fish
+            'Trout': 8.00,
+            'Salmon': 12.00,
+            'Pike': 7.00,
+            'Perch': 6.00,
+            // Harvested crops
+            'Pear': 4.00,
+            'Pumpkin': 10.00
+        };
+        
+        return prices[itemName] || 1.00;
+    }
+    
+    function getItemDescription(itemName) {
+        const descriptions = {
+            'Bilberry': 'Sweet wild berries',
+            'Wood Sorrel': 'Tangy lemony leaves',
+            'Trout': 'Fresh caught river fish',
+            'Salmon': 'Premium river fish',
+            'Pike': 'Large predator fish', 
+            'Perch': 'Common river fish',
+            'Pear': 'Home-grown fruit',
+            'Pumpkin': 'Large harvest vegetable'
+        };
+        
+        return descriptions[itemName] || 'Farm produce';
+    }
+    
+    // Global functions for Market Farm
+    window.sellItem = function(itemName) {
+        const itemIndex = gameState.inventory.findIndex(item => item.name === itemName);
+        if (itemIndex === -1) {
+            showNotification('❌ Item not found in inventory!');
+            return;
+        }
+        
+        const price = getSellPrice(itemName);
+        gameState.budget += price;
+        gameState.inventory.splice(itemIndex, 1);
+        
+        const emoji = FOOD_EMOJIS[itemName] || '🌿';
+        showNotification(`💰 Sold ${itemName} for £${price}! ${emoji}`, '#4CAF50');
+        
+        // Update money display in the modal
+        if (window.currentFarmModal) {
+            const moneyDisplay = window.currentFarmModal.querySelector('p');
+            if (moneyDisplay) {
+                moneyDisplay.textContent = `Current Money: £${gameState.budget.toFixed(2)}`;
+            }
+        }
+        
+        // Refresh the shop to remove sold item
+        closeMarketFarmShop();
+        setTimeout(() => openMarketFarmShop(), 100);
+    };
+    
+    window.closeMarketFarmShop = function() {
+        if (window.currentFarmModal) {
+            window.currentFarmModal.remove();
+            window.currentFarmModal = null;
+        }
+    };
+
+    // --- SEEDS AND PLANTING SYSTEM ---
+    
+    // Global function for planting seeds
+    window.plantSeed = function(seedName) {
+        const seedIndex = gameState.inventory.findIndex(item => item.name === seedName);
+        if (seedIndex === -1) {
+            showNotification('❌ Seed not found in inventory!');
+            return;
+        }
+        
+        // Check if there's already a plant at this location
+        const currentX = gameState.player.x;
+        const currentY = gameState.player.y;
+        const existingPlant = gameState.world.plantedSeeds.find(plant => 
+            Math.abs(plant.x - currentX) < 10 && Math.abs(plant.y - currentY) < 10
+        );
+        
+        if (existingPlant) {
+            showNotification('❌ There is already a plant growing here!');
+            return;
+        }
+        
+        // Remove seed from inventory
+        gameState.inventory.splice(seedIndex, 1);
+        
+        // Determine plant type and growth time
+        let plantType, growthTimeMinutes, harvestItem;
+        
+        if (seedName.includes('Apple')) {
+            plantType = 'Apple Tree';
+            growthTimeMinutes = 3; // 3 minutes game time
+            harvestItem = 'Apple';
+        } else if (seedName.includes('Pear')) {
+            plantType = 'Pear Tree';
+            growthTimeMinutes = 3; // 3 minutes game time
+            harvestItem = 'Pear';
+        } else if (seedName.includes('Pumpkin')) {
+            plantType = 'Pumpkin Vine';
+            growthTimeMinutes = 2; // 2 minutes game time
+            harvestItem = 'Pumpkin';
+        }
+        
+        // Add planted seed to world state
+        const plantedSeed = {
+            id: Date.now() + Math.random(), // Unique ID
+            seedName: seedName,
+            plantType: plantType,
+            x: currentX,
+            y: currentY,
+            z: getTerrainHeight(currentX, currentY),
+            plantedTime: gameState.time.day * 24 * 60 + gameState.time.hour * 60 + gameState.time.minute,
+            growthTimeMinutes: growthTimeMinutes,
+            harvestItem: harvestItem,
+            isGrown: false,
+            mesh: null // Will store 3D object reference
+        };
+        
+        gameState.world.plantedSeeds.push(plantedSeed);
+        
+        // Create 3D representation
+        createPlant3D(plantedSeed);
+        
+        showNotification(`🌱 Planted ${seedName} at your location!`);
+        
+        // Close the modal
+        if (modals.generic) {
+            modals.generic.style.display = 'none';
+        }
+    };
+    
+    function createPlant3D(plant) {
+        if (window.no3DGraphics || !scene) return;
+        
+        let geometry, material, mesh;
+        
+        if (!plant.isGrown) {
+            // Small sprout for newly planted seeds
+            geometry = new THREE.ConeGeometry(0.5, 2, 6);
+            material = new THREE.MeshLambertMaterial({ color: 0x90EE90 }); // Light green
+        } else {
+            // Full grown plant
+            if (plant.plantType.includes('Tree')) {
+                // Tree with trunk and leaves
+                geometry = new THREE.CylinderGeometry(1, 2, 8, 8);
+                material = new THREE.MeshLambertMaterial({ color: 0x8B4513 }); // Brown trunk
+                mesh = new THREE.Mesh(geometry, material);
+                mesh.position.set(plant.x, plant.z + 4, plant.y);
+                
+                // Add leaves/crown
+                const leavesGeometry = new THREE.SphereGeometry(4, 8, 8);
+                const leavesMaterial = new THREE.MeshLambertMaterial({ color: 0x228B22 }); // Forest green
+                const leaves = new THREE.Mesh(leavesGeometry, leavesMaterial);
+                leaves.position.set(plant.x, plant.z + 10, plant.y);
+                
+                // Group trunk and leaves
+                const treeGroup = new THREE.Group();
+                treeGroup.add(mesh);
+                treeGroup.add(leaves);
+                treeGroup.userData = { plantId: plant.id, isPlant: true };
+                scene.add(treeGroup);
+                plant.mesh = treeGroup;
+                return;
+                
+            } else {
+                // Pumpkin vine
+                geometry = new THREE.SphereGeometry(2, 8, 8);
+                material = new THREE.MeshLambertMaterial({ color: 0xFF6347 }); // Orange
+            }
+        }
+        
+        mesh = new THREE.Mesh(geometry, material);
+        mesh.position.set(plant.x, plant.z + 1, plant.y);
+        mesh.userData = { plantId: plant.id, isPlant: true };
+        mesh.castShadow = true;
+        scene.add(mesh);
+        plant.mesh = mesh;
+    }
+    
+    function updatePlants() {
+        const currentGameTime = gameState.time.day * 24 * 60 + gameState.time.hour * 60 + gameState.time.minute;
+        
+        gameState.world.plantedSeeds.forEach(plant => {
+            if (!plant.isGrown) {
+                const timeSincePlanted = currentGameTime - plant.plantedTime;
+                if (timeSincePlanted >= plant.growthTimeMinutes) {
+                    // Plant has grown!
+                    plant.isGrown = true;
+                    
+                    // Remove old mesh and create new grown mesh
+                    if (plant.mesh && scene) {
+                        scene.remove(plant.mesh);
+                    }
+                    createPlant3D(plant);
+                    
+                    showNotification(`🌿 Your ${plant.plantType} has finished growing!`);
+                }
+            }
+        });
+    }
+    
+    function updateTreasureGlow() {
+        const time = Date.now() * 0.003; // Time factor for pulsing
+        
+        treasureHunt.clueBoxes.forEach(clueBoxData => {
+            if (clueBoxData.light && clueBoxData.light.userData.isPulsing) {
+                const originalIntensity = clueBoxData.light.userData.originalIntensity;
+                const pulse = Math.sin(time * 2) * 0.3 + 1; // Pulse between 0.7 and 1.3
+                clueBoxData.light.intensity = originalIntensity * pulse;
+            }
+        });
+    }
+    
+    function checkPlantHarvesting() {
+        const playerX = gameState.player.x;
+        const playerY = gameState.player.y;
+        
+        gameState.world.plantedSeeds.forEach((plant, index) => {
+            if (plant.isGrown) {
+                const distance = Math.sqrt(
+                    Math.pow(playerX - plant.x, 2) + 
+                    Math.pow(playerY - plant.y, 2)
+                );
+                
+                if (distance < 15) {
+                    // Show harvest prompt
+                    if (!window.plantPromptShown || window.plantPromptShown !== plant.id) {
+                        showNotification(`🌾 Press [Enter] to harvest ${plant.plantType}`);
+                        window.plantPromptShown = plant.id;
+                    }
+                    
+                    // Check for Enter key press
+                    if (keysPressed['enter']) {
+                        harvestPlant(index);
+                        keysPressed['enter'] = false; // Prevent repeated harvesting
+                    }
+                } else if (window.plantPromptShown === plant.id) {
+                    window.plantPromptShown = null;
+                }
+            }
+        });
+    }
+    
+    function harvestPlant(plantIndex) {
+        const plant = gameState.world.plantedSeeds[plantIndex];
+        if (!plant || !plant.isGrown) return;
+        
+        // Add harvest to inventory
+        const harvestCount = plant.plantType.includes('Tree') ? 
+            Math.floor(Math.random() * 3) + 2 : // Trees give 2-4 fruit
+            Math.floor(Math.random() * 2) + 1;   // Vines give 1-2 fruit
+        
+        for (let i = 0; i < harvestCount; i++) {
+            gameState.inventory.push({ name: plant.harvestItem });
+        }
+        
+        // Remove plant from world
+        if (plant.mesh && scene) {
+            scene.remove(plant.mesh);
+        }
+        gameState.world.plantedSeeds.splice(plantIndex, 1);
+        
+        showNotification(`🌾 Harvested ${harvestCount} ${plant.harvestItem}${harvestCount > 1 ? 's' : ''}!`);
+        window.plantPromptShown = null;
+    }
+
     function createSkySystem() {
         if (window.no3DGraphics || !scene) return;
         
@@ -1992,67 +2841,154 @@ document.addEventListener('DOMContentLoaded', () => {
     }
     
     function createSkyDome() {
+        console.log('Creating sky dome...');
+        
         // Create a large sphere for the sky
         const skyGeometry = new THREE.SphereGeometry(5000, 32, 32);
         
-        // Create gradient texture based on time of day
-        const canvas = document.createElement('canvas');
-        canvas.width = 256;
-        canvas.height = 256;
-        const ctx = canvas.getContext('2d');
-        
-        updateSkyGradient(ctx, canvas);
-        
-        const skyTexture = new THREE.CanvasTexture(canvas);
+        // Start with a simple blue material to test
         const skyMaterial = new THREE.MeshBasicMaterial({ 
-            map: skyTexture, 
+            color: 0x87CEEB, // Sky blue
             side: THREE.BackSide // Render inside of sphere
         });
         
         skyDome = new THREE.Mesh(skyGeometry, skyMaterial);
         skyDome.name = 'skyDome';
+        skyDome.renderOrder = -1; // Render first
         scene.add(skyDome);
+        
+        console.log('Sky dome created and added to scene', skyDome);
+        
+        // After a short delay, switch to gradient texture
+        setTimeout(() => {
+            console.log('Switching to gradient texture...');
+            const canvas = document.createElement('canvas');
+            canvas.width = 256;
+            canvas.height = 256;
+            const ctx = canvas.getContext('2d');
+            
+            updateSkyGradient(ctx, canvas);
+            
+            const skyTexture = new THREE.CanvasTexture(canvas);
+            skyDome.material = new THREE.MeshBasicMaterial({ 
+                map: skyTexture, 
+                side: THREE.BackSide
+            });
+            skyDome.material.needsUpdate = true;
+            console.log('Gradient texture applied');
+        }, 2000);
     }
     
     function updateSkyGradient(ctx, canvas) {
         const { hour } = gameState.time;
         
-        // Create gradient based on time of day
-        const gradient = ctx.createLinearGradient(0, 0, 0, canvas.height);
+        // Clear the canvas
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
         
-        if (hour >= 6 && hour < 8) {
-            // Morning - soft sunrise colors
-            gradient.addColorStop(0, '#FFB347'); // Light orange
+        if (hour >= 5 && hour < 7) {
+            // Early Morning / Dawn - red/orange gradient on one side
+            const gradient = ctx.createLinearGradient(0, 0, canvas.width, canvas.height);
+            gradient.addColorStop(0, '#87CEEB'); // Light blue at top
+            gradient.addColorStop(0.3, '#FFB347'); // Orange
+            gradient.addColorStop(0.6, '#FF6347'); // Red-orange 
+            gradient.addColorStop(1, '#4682B4'); // Darker blue at bottom
+            
+            ctx.fillStyle = gradient;
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            
+            // Add reddish glow on one side for sunrise
+            const sideGradient = ctx.createRadialGradient(canvas.width * 0.8, canvas.height * 0.7, 0, canvas.width * 0.8, canvas.height * 0.7, canvas.width * 0.6);
+            sideGradient.addColorStop(0, 'rgba(255, 99, 71, 0.4)'); // Red glow
+            sideGradient.addColorStop(0.5, 'rgba(255, 165, 0, 0.2)'); // Orange fade
+            sideGradient.addColorStop(1, 'rgba(255, 165, 0, 0)'); // Transparent
+            
+            ctx.fillStyle = sideGradient;
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            
+        } else if (hour >= 7 && hour < 11) {
+            // Morning - bright gradient, lighter at top
+            const gradient = ctx.createLinearGradient(0, 0, 0, canvas.height);
+            gradient.addColorStop(0, '#B0E0E6'); // Powder blue (lighter at top)
             gradient.addColorStop(0.3, '#87CEEB'); // Sky blue
-            gradient.addColorStop(1, '#4682B4'); // Steel blue
-        } else if (hour >= 8 && hour < 18) {
-            // Day - clear blue sky
-            gradient.addColorStop(0, '#87CEEB'); // Sky blue
-            gradient.addColorStop(0.5, '#4682B4'); // Steel blue
-            gradient.addColorStop(1, '#1E90FF'); // Dodger blue
-        } else if (hour >= 18 && hour < 20) {
-            // Evening - sunset colors
-            gradient.addColorStop(0, '#FF6347'); // Tomato
+            gradient.addColorStop(0.7, '#4682B4'); // Steel blue
+            gradient.addColorStop(1, '#1E90FF'); // Dodger blue (darker at bottom)
+            
+            ctx.fillStyle = gradient;
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            
+        } else if (hour >= 11 && hour < 17) {
+            // Day - clear bright blue, very light at top
+            const gradient = ctx.createLinearGradient(0, 0, 0, canvas.height);
+            gradient.addColorStop(0, '#E0F6FF'); // Very light blue at top
+            gradient.addColorStop(0.2, '#B0E0E6'); // Powder blue
+            gradient.addColorStop(0.5, '#87CEEB'); // Sky blue
+            gradient.addColorStop(0.8, '#4682B4'); // Steel blue
+            gradient.addColorStop(1, '#1E90FF'); // Dodger blue at bottom
+            
+            ctx.fillStyle = gradient;
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            
+        } else if (hour >= 17 && hour < 19) {
+            // Evening / Dusk - red/orange gradient on one side
+            const gradient = ctx.createLinearGradient(0, 0, 0, canvas.height);
+            gradient.addColorStop(0, '#FFB347'); // Light orange at top
             gradient.addColorStop(0.3, '#FF7F50'); // Coral
-            gradient.addColorStop(0.6, '#4682B4'); // Steel blue
-            gradient.addColorStop(1, '#191970'); // Midnight blue
+            gradient.addColorStop(0.6, '#FF6347'); // Tomato
+            gradient.addColorStop(1, '#4682B4'); // Steel blue at bottom
+            
+            ctx.fillStyle = gradient;
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            
+            // Add reddish glow on opposite side for sunset
+            const sideGradient = ctx.createRadialGradient(canvas.width * 0.2, canvas.height * 0.7, 0, canvas.width * 0.2, canvas.height * 0.7, canvas.width * 0.6);
+            sideGradient.addColorStop(0, 'rgba(255, 69, 0, 0.5)'); // Red-orange glow
+            sideGradient.addColorStop(0.4, 'rgba(255, 140, 0, 0.3)'); // Orange fade
+            sideGradient.addColorStop(1, 'rgba(255, 140, 0, 0)'); // Transparent
+            
+            ctx.fillStyle = sideGradient;
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            
+        } else if (hour >= 19 && hour < 22) {
+            // Late Evening - purple/blue transition
+            const gradient = ctx.createLinearGradient(0, 0, 0, canvas.height);
+            gradient.addColorStop(0, '#483D8B'); // Dark slate blue at top
+            gradient.addColorStop(0.4, '#191970'); // Midnight blue
+            gradient.addColorStop(0.7, '#000080'); // Navy
+            gradient.addColorStop(1, '#1a1a2e'); // Very dark blue at bottom
+            
+            ctx.fillStyle = gradient;
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            
         } else {
-            // Night - dark sky
-            gradient.addColorStop(0, '#191970'); // Midnight blue
-            gradient.addColorStop(0.5, '#000080'); // Navy
-            gradient.addColorStop(1, '#000000'); // Black
+            // Night - dark gradient with stars effect
+            const gradient = ctx.createLinearGradient(0, 0, 0, canvas.height);
+            gradient.addColorStop(0, '#1a1a2e'); // Dark blue-gray at top
+            gradient.addColorStop(0.3, '#16213e'); // Darker blue
+            gradient.addColorStop(0.7, '#0f1419'); // Very dark blue
+            gradient.addColorStop(1, '#000000'); // Black at bottom
+            
+            ctx.fillStyle = gradient;
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            
+            // Add some star-like points
+            ctx.fillStyle = 'rgba(255, 255, 255, 0.8)';
+            for (let i = 0; i < 20; i++) {
+                const x = Math.random() * canvas.width;
+                const y = Math.random() * canvas.height * 0.6; // Stars in upper portion
+                const size = Math.random() * 2 + 1;
+                ctx.beginPath();
+                ctx.arc(x, y, size, 0, Math.PI * 2);
+                ctx.fill();
+            }
         }
-        
-        ctx.fillStyle = gradient;
-        ctx.fillRect(0, 0, canvas.width, canvas.height);
     }
     
     function createSun() {
         const sunGeometry = new THREE.SphereGeometry(50, 16, 16);
         const sunMaterial = new THREE.MeshBasicMaterial({ 
-            color: 0xFFFFAA,
-            emissive: 0xFFFF00,
-            emissiveIntensity: 0.3
+            color: 0xFFFF88, // Bright yellow sun color
+            transparent: true,
+            opacity: 0.9
         });
         
         sun = new THREE.Mesh(sunGeometry, sunMaterial);
@@ -2148,8 +3084,9 @@ document.addEventListener('DOMContentLoaded', () => {
         // Update clouds
         updateClouds();
         
-        // Update sky gradient every few seconds
-        if (frameCount % 180 === 0 && skyDome) { // Every 3 seconds at 60fps
+        // Update sky gradient more frequently and add debugging
+        if (frameCount % 60 === 0 && skyDome) { // Every 1 second at 60fps
+            console.log('Updating sky dome texture at hour:', gameState.time.hour);
             const canvas = document.createElement('canvas');
             canvas.width = 256;
             canvas.height = 256;
@@ -2160,6 +3097,9 @@ document.addEventListener('DOMContentLoaded', () => {
             const skyTexture = new THREE.CanvasTexture(canvas);
             skyDome.material.map = skyTexture;
             skyDome.material.needsUpdate = true;
+            console.log('Sky dome material updated');
+        } else if (!skyDome) {
+            console.warn('Sky dome not found in updateSkySystem');
         }
     }
     
@@ -2276,10 +3216,21 @@ document.addEventListener('DOMContentLoaded', () => {
             checkCaveEntrance();
             
             // Check treasure hunt interactions
+            updateTreasureGlow();
             checkTreasureHuntInteraction();
+            
+            // Check wild plant interactions
+            checkWildPlantInteraction();
             
             // Check ASDA shop interaction
             checkAsdaInteraction();
+            
+            // Check Market Farm interaction
+            checkMarketFarmInteraction();
+            
+            // Update and check plant interactions
+            updatePlants();
+            checkPlantHarvesting();
             
             // Animate waterfall with more realistic flow
             if (waterfallMesh && waterfallMesh.material && waterfallMesh.material.map) {
@@ -2304,8 +3255,8 @@ document.addEventListener('DOMContentLoaded', () => {
             // Update sky system
             updateSkySystem();
             
-            // Clear depth buffer but not color (sky dome handles background)
-            renderer.clear(false, true, false);
+            // Clear both color and depth buffers for proper sky dome rendering
+            renderer.clear(true, true, false);
             
             // Render the scene
             renderer.render(scene, camera);
@@ -2412,17 +3363,13 @@ document.addEventListener('DOMContentLoaded', () => {
         
         const { hour } = gameState.time;
         let intensity = 0.3; // Night
-        let skyColor = 0x23395B; // Night sky
         
         if (hour >= 5 && hour < 12) { // Morning
             intensity = 0.8;
-            skyColor = 0xF7B267; // Morning sky color
         } else if (hour >= 12 && hour < 17) { // Afternoon
             intensity = 1.0;
-            skyColor = 0x87CEEB; // Afternoon sky (light blue)
         } else if (hour >= 17 && hour < 21) { // Evening
             intensity = 0.6;
-            skyColor = 0xFF5A5F; // Evening sky color
         }
         
         // Update directional light
@@ -2433,8 +3380,8 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         }
         
-        // Update sky color in renderer
-        renderer.setClearColor(skyColor);
+        // Don't set renderer clear color - let sky dome handle background
+        // renderer.setClearColor is removed to allow sky dome to show
     }
     
     function onWindowResize() {
@@ -2666,6 +3613,7 @@ document.addEventListener('DOMContentLoaded', () => {
     function init() {
         // Cookie Consent
         const cookieConsent = document.getElementById('cookie-consent');
+         cookieConsent.style.display = 'none';
         const acceptCookies = document.getElementById('accept-cookies');
         acceptCookies.onclick = () => {
             cookieConsent.style.display = 'none';
@@ -2937,6 +3885,14 @@ document.addEventListener('DOMContentLoaded', () => {
             console.log('Restoring pony...');
             createPony3D();
             updatePonyUI();
+        }
+        
+        // Restore planted seeds
+        if (!window.no3DGraphics && gameState.world.plantedSeeds && gameState.world.plantedSeeds.length > 0) {
+            console.log('Restoring planted seeds...');
+            gameState.world.plantedSeeds.forEach(plant => {
+                createPlant3D(plant);
+            });
         }
         
         if (!gameLoop.running) {
@@ -3271,12 +4227,14 @@ document.addEventListener('DOMContentLoaded', () => {
             itemDiv.textContent = `${emoji} ${item.name}`;
             
             itemDiv.onclick = () => {
-                // Consume food (shop items, Asda items, and caught fish)
+                // Consume food (shop items, Asda items, caught fish, and harvested crops)
                 const isShopFood = SHOP_ITEMS.find(shopItem => shopItem.name === item.name && shopItem.type === 'food');
                 const isAsdaFood = ASDA_ITEMS.find(asdaItem => asdaItem.name === item.name && asdaItem.type === 'food');
                 const isRawFish = ['Trout', 'Salmon', 'Pike', 'Perch'].includes(item.name);
+                const isHarvestedCrop = ['Pear', 'Pumpkin'].includes(item.name);
+                const isWildPlant = WILD_PLANTS.hasOwnProperty(item.name);
                 
-                if (isShopFood || isAsdaFood || isRawFish) {
+                if (isShopFood || isAsdaFood || isRawFish || isHarvestedCrop || isWildPlant) {
                     // Different hunger values for individual food items (less efficient than recipes)
                     const foodHungerValues = {
                         'Bread': 12,
@@ -3302,7 +4260,13 @@ document.addEventListener('DOMContentLoaded', () => {
                         'Sandwich': 22,
                         'Yogurt': 12,
                         'Bananas': 8,
-                        'Orange Juice': 6
+                        'Orange Juice': 6,
+                        // Harvested crops
+                        'Pear': 10,
+                        'Pumpkin': 15,
+                        // Wild edible plants
+                        'Bilberry': 15,
+                        'Wood Sorrel': 10
                     };
                     
                     const hungerReduction = foodHungerValues[item.name] || 10;
@@ -3312,6 +4276,9 @@ document.addEventListener('DOMContentLoaded', () => {
                     
                     if (isRawFish) {
                         showNotification(`You ate the raw ${item.name}. Fresh catch! Hunger reduced by ${hungerReduction}.`);
+                    } else if (isWildPlant) {
+                        const emoji = FOOD_EMOJIS[item.name] || '🌿';
+                        showNotification(`${emoji} You ate the wild ${item.name}. ${WILD_PLANTS[item.name].description}! Hunger reduced by ${hungerReduction}.`);
                     } else {
                         showNotification(`You ate the ${item.name}. Hunger reduced by ${hungerReduction}.`);
                     }
@@ -3527,12 +4494,83 @@ document.addEventListener('DOMContentLoaded', () => {
         openModal(modals.generic);
     };
     
+    menuIcons.seeds.onclick = () => {
+        genericModalTitle.textContent = "🌱 Plant Seeds";
+        
+        // Get available seeds from inventory
+        const availableSeeds = gameState.inventory.filter(item => 
+            item.name.includes('Seeds') || item.name.includes('seeds')
+        );
+        
+        let content = '<div class="seeds-container">';
+        
+        if (availableSeeds.length === 0) {
+            content += '<p>You have no seeds to plant. Buy some from ASDA!</p>';
+            content += '<p><strong>Available seed types:</strong></p>';
+            content += '<ul>';
+            content += '<li>🌱 Apple Tree Seeds - Grows apple trees</li>';
+            content += '<li>🌱 Pear Tree Seeds - Grows pear trees</li>';
+            content += '<li>🌱 Pumpkin Seeds - Grows pumpkin vines</li>';
+            content += '</ul>';
+        } else {
+            content += '<p>Select a seed to plant at your current location:</p>';
+            content += `<p><strong>Current position:</strong> X: ${gameState.player.x.toFixed(1)}, Y: ${gameState.player.y.toFixed(1)}</p>`;
+            content += '<div class="seed-selection">';
+            
+            // Group seeds by type
+            const seedCounts = {};
+            availableSeeds.forEach(seed => {
+                seedCounts[seed.name] = (seedCounts[seed.name] || 0) + 1;
+            });
+            
+            Object.keys(seedCounts).forEach(seedName => {
+                const emoji = FOOD_EMOJIS[seedName] || '🌱';
+                const count = seedCounts[seedName];
+                content += `
+                    <div class="seed-option" onclick="plantSeed('${seedName}')" style="
+                        background: white; 
+                        padding: 15px; 
+                        margin: 10px 0; 
+                        border-radius: 10px; 
+                        cursor: pointer; 
+                        border: 2px solid #4CAF50;
+                        text-align: center;
+                    ">
+                        <div style="font-size: 24px; margin-bottom: 5px;">${emoji}</div>
+                        <div><strong>${seedName}</strong></div>
+                        <div>Quantity: ${count}</div>
+                        <div style="margin-top: 5px; color: #666;">Click to plant here</div>
+                    </div>
+                `;
+            });
+            
+            content += '</div>';
+        }
+        
+        content += '</div>';
+        genericModalContent.innerHTML = content;
+        openModal(modals.generic);
+    };
+    
     menuIcons.recipes.onclick = () => {
         genericModalTitle.textContent = "Recipe Book";
         
         // Get available ingredients from inventory
         const availableIngredients = gameState.inventory
-            .filter(item => SHOP_ITEMS.find(shopItem => shopItem.name === item.name && shopItem.type === 'food'))
+            .filter(item => {
+                // Include shop food items
+                const isShopFood = SHOP_ITEMS.find(shopItem => shopItem.name === item.name && shopItem.type === 'food');
+                // Include ASDA food items
+                const isAsdaFood = ASDA_ITEMS.find(asdaItem => asdaItem.name === item.name && asdaItem.type === 'food');
+                // Include caught fish
+                const isCaughtFish = ['Trout', 'Salmon', 'Pike', 'Perch'].includes(item.name);
+                // Include harvested crops
+                const isHarvestedCrop = ['Pear', 'Pumpkin'].includes(item.name);
+                // Include wild plants
+                const isWildPlant = WILD_PLANTS.hasOwnProperty(item.name);
+                
+                return isShopFood || isAsdaFood || isCaughtFish || isHarvestedCrop || isWildPlant;
+            })
             .map(item => item.name);
         
         // Check which recipes can be made
@@ -4528,7 +5566,20 @@ document.addEventListener('DOMContentLoaded', () => {
         
         // Check if we have all required ingredients
         const availableIngredients = gameState.inventory
-            .filter(item => SHOP_ITEMS.find(shopItem => shopItem.name === item.name && shopItem.type === 'food'))
+            .filter(item => {
+                // Include shop food items
+                const isShopFood = SHOP_ITEMS.find(shopItem => shopItem.name === item.name && shopItem.type === 'food');
+                // Include ASDA food items
+                const isAsdaFood = ASDA_ITEMS.find(asdaItem => asdaItem.name === item.name && asdaItem.type === 'food');
+                // Include caught fish
+                const isCaughtFish = ['Trout', 'Salmon', 'Pike', 'Perch'].includes(item.name);
+                // Include harvested crops
+                const isHarvestedCrop = ['Pear', 'Pumpkin'].includes(item.name);
+                // Include wild plants
+                const isWildPlant = WILD_PLANTS.hasOwnProperty(item.name);
+                
+                return isShopFood || isAsdaFood || isCaughtFish || isHarvestedCrop || isWildPlant;
+            })
             .map(item => item.name);
         
         const canMake = recipe.ingredients.every(ingredient => 
