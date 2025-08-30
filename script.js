@@ -2384,6 +2384,16 @@ document.addEventListener('DOMContentLoaded', () => {
                 (playerZ - chest.position.z) * (playerZ - chest.position.z)
             );
             
+            // Show approach prompt when getting close
+            if (distance < 15 && distance >= 10) {
+                if (!window.treasureChestPromptShown) {
+                    showNotification("💰 Move closer to automatically open the treasure chest!", '#FFD700');
+                    window.treasureChestPromptShown = true;
+                }
+            } else if (distance >= 15) {
+                window.treasureChestPromptShown = false;
+            }
+            
             if (distance < 10) {
                 openTreasureChest();
             }
@@ -3873,6 +3883,11 @@ document.addEventListener('DOMContentLoaded', () => {
         // Show confirmation
         showNotification('New game started! Welcome back to the moors.', 4000);
         
+        // Show tutorial popup with key controls after a brief delay
+        setTimeout(() => {
+            showTutorialPopup();
+        }, 1000);
+        
         console.log('Game reset to initial state');
     }
 
@@ -3882,6 +3897,66 @@ document.addEventListener('DOMContentLoaded', () => {
         setTimeout(() => {
             notification.style.top = '-100px';
         }, duration);
+    }
+
+    function showTutorialPopup() {
+        // Check if tutorial has already been shown
+        if (window.tutorialShown) return;
+        window.tutorialShown = true;
+
+        // Create tutorial popup
+        const tutorialDiv = document.createElement('div');
+        tutorialDiv.style.position = 'fixed';
+        tutorialDiv.style.top = '50%';
+        tutorialDiv.style.left = '50%';
+        tutorialDiv.style.transform = 'translate(-50%, -50%)';
+        tutorialDiv.style.background = 'rgba(0, 0, 0, 0.9)';
+        tutorialDiv.style.color = '#FFD700';
+        tutorialDiv.style.padding = '30px';
+        tutorialDiv.style.borderRadius = '15px';
+        tutorialDiv.style.fontSize = '16px';
+        tutorialDiv.style.textAlign = 'left';
+        tutorialDiv.style.zIndex = '2000';
+        tutorialDiv.style.border = '3px solid #FFD700';
+        tutorialDiv.style.boxShadow = '0 0 20px rgba(255, 215, 0, 0.5)';
+        tutorialDiv.style.fontFamily = 'monospace';
+        tutorialDiv.style.maxWidth = '600px';
+        tutorialDiv.style.whiteSpace = 'pre-line';
+        
+        tutorialDiv.innerHTML = `
+            <div style="text-align: center; font-size: 20px; margin-bottom: 20px; color: #00FF00;">
+                🎮 GROUP MOOR SURVIVAL - GAME CONTROLS 🎮
+            </div>
+            
+            <div style="color: #FFFFFF; margin-bottom: 15px;">
+                <strong style="color: #FFD700;">MOVEMENT CONTROLS:</strong>
+                • Arrow Keys or WASD - Move around
+                • Hold Shift - Run faster
+            </div>
+            
+            <div style="color: #FFFFFF; margin-bottom: 15px;">
+                <strong style="color: #FFD700;">INTERACTION CONTROLS:</strong>
+                • E - Pick wild plants and items
+                • Enter - Open shops, harvest crops, use buildings
+                • C - Enter caves (when near entrance)
+            </div>
+            
+            <div style="color: #FFFFFF; margin-bottom: 20px;">
+                <strong style="color: #FFD700;">IMPORTANT:</strong>
+                Watch for popup messages that tell you when these controls are available!
+                They will appear when you're near interactive objects.
+            </div>
+            
+            <div style="text-align: center;">
+                <button onclick="this.parentElement.remove()" 
+                        style="background: #FFD700; color: #000; border: none; padding: 12px 25px; 
+                               border-radius: 8px; font-size: 16px; cursor: pointer; font-weight: bold;">
+                    Got it! Let's Play
+                </button>
+            </div>
+        `;
+        
+        document.body.appendChild(tutorialDiv);
     }
 
     function earnBadge(badgeName) {
@@ -4419,6 +4494,46 @@ document.addEventListener('DOMContentLoaded', () => {
         menuIcons.fishing.classList.toggle('disabled', !nearRiver);
         menuIcons.pony.classList.toggle('disabled', !nearPonyFarm);
         menuIcons.sleep.classList.toggle('disabled', !(nearTent && timeOfDay === 'Evening' || timeOfDay === 'Night'));
+        
+        // Show river fishing interaction popup
+        if (nearRiver) {
+            if (!window.riverPromptShown) {
+                showNotification("🎣 Click the Fishing icon in the menu to start fishing!", '#4682B4');
+                window.riverPromptShown = true;
+            }
+        } else {
+            window.riverPromptShown = false;
+        }
+        
+        // Show pony farm interaction popup
+        if (nearPonyFarm && !gameState.pony.hired) {
+            if (!window.ponyFarmPromptShown) {
+                showNotification("🐴 Click the Pony icon in the menu to hire a pony!", '#8B4513');
+                window.ponyFarmPromptShown = true;
+            }
+        } else {
+            window.ponyFarmPromptShown = false;
+        }
+        
+        // Show camping interaction popup
+        if (hasTentInBag && !nearTent) {
+            if (!window.campPromptShown) {
+                showNotification("⛺ Click the Camp icon in the menu to pitch your tent!", '#228B22');
+                window.campPromptShown = true;
+            }
+        } else {
+            window.campPromptShown = false;
+        }
+        
+        // Show sleep interaction popup
+        if (nearTent && (timeOfDay === 'Evening' || timeOfDay === 'Night')) {
+            if (!window.sleepPromptShown) {
+                showNotification("😴 Click the Sleep icon in the menu to rest at your tent!", '#4B0082');
+                window.sleepPromptShown = true;
+            }
+        } else {
+            window.sleepPromptShown = false;
+        }
         
         // Camp icon is enabled if: player has tent in bag OR player is near pitched tent
         menuIcons.camp.classList.toggle('disabled', !(hasTentInBag || nearTent));
