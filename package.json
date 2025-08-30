@@ -1,0 +1,26 @@
+{
+  "name": "group-moor-survival",
+  "version": "1.0.0",
+  "description": "A survival game set on the Yorkshire Moors",
+  "main": "index.html",
+  "scripts": {
+    "start": "npx http-server . -p 3000",
+    "dev": "npx http-server . -p 3000 -c-1",
+    "build": "echo 'Static site - no build needed'"
+  },
+  "keywords": [
+    "game",
+    "survival",
+    "javascript",
+    "three.js",
+    "web-game"
+  ],
+  "author": "Your Name",
+  "license": "MIT",
+  "devDependencies": {
+    "http-server": "^14.1.1"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}
