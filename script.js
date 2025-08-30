@@ -1385,21 +1385,240 @@ document.addEventListener('DOMContentLoaded', () => {
     }
     
     function createLandmarks() {
-        // ASDA building (moved to edge of map)
-        const asdaGeometry = new THREE.BoxGeometry(30, 20, 40);
-        const asdaMaterial = new THREE.MeshLambertMaterial({ color: 0x00ff00 });
-        const asda = new THREE.Mesh(asdaGeometry, asdaMaterial);
-        asda.position.set(-600, getTerrainHeight(-600, -600) + 10, -600);
-        asda.castShadow = true;
-        scene.add(asda);
+        // ASDA Supermarket building (moved to edge of map)
+        const asdaGroup = new THREE.Group();
         
-        // Pony Farm (moved to edge of map)
-        const farmGeometry = new THREE.BoxGeometry(25, 15, 30);
-        const farmMaterial = new THREE.MeshLambertMaterial({ color: 0x8B4513 });
-        const farm = new THREE.Mesh(farmGeometry, farmMaterial);
-        farm.position.set(400, getTerrainHeight(400, 600) + 7.5, 600);
-        farm.castShadow = true;
-        scene.add(farm);
+        // Main supermarket building - larger and more rectangular like a real supermarket
+        const mainBuildingGeometry = new THREE.BoxGeometry(60, 25, 35);
+        const mainBuildingMaterial = new THREE.MeshLambertMaterial({ color: 0xf0f0f0 }); // Light gray
+        const mainBuilding = new THREE.Mesh(mainBuildingGeometry, mainBuildingMaterial);
+        mainBuilding.position.set(0, 12.5, 0);
+        asdaGroup.add(mainBuilding);
+        
+        // Green accent stripe (ASDA brand color)
+        const stripeGeometry = new THREE.BoxGeometry(61, 3, 36);
+        const stripeMaterial = new THREE.MeshLambertMaterial({ color: 0x00B04F }); // ASDA green
+        const stripe = new THREE.Mesh(stripeGeometry, stripeMaterial);
+        stripe.position.set(0, 20, 0);
+        asdaGroup.add(stripe);
+        
+        // Entrance canopy
+        const canopyGeometry = new THREE.BoxGeometry(20, 2, 8);
+        const canopyMaterial = new THREE.MeshLambertMaterial({ color: 0x00B04F });
+        const canopy = new THREE.Mesh(canopyGeometry, canopyMaterial);
+        canopy.position.set(0, 5, 20);
+        asdaGroup.add(canopy);
+        
+        // Entrance doors (dark rectangles)
+        const doorGeometry = new THREE.BoxGeometry(3, 8, 0.5);
+        const doorMaterial = new THREE.MeshLambertMaterial({ color: 0x333333 });
+        const door1 = new THREE.Mesh(doorGeometry, doorMaterial);
+        door1.position.set(-3, 4, 17.8);
+        const door2 = new THREE.Mesh(doorGeometry, doorMaterial);
+        door2.position.set(3, 4, 17.8);
+        asdaGroup.add(door1);
+        asdaGroup.add(door2);
+        
+        // Windows along the front
+        const windowGeometry = new THREE.BoxGeometry(4, 6, 0.2);
+        const windowMaterial = new THREE.MeshLambertMaterial({ color: 0x87CEEB }); // Sky blue
+        for (let i = -4; i <= 4; i += 2) {
+            if (Math.abs(i) > 1) { // Skip door area
+                const window = new THREE.Mesh(windowGeometry, windowMaterial);
+                window.position.set(i * 6, 10, 17.6);
+                asdaGroup.add(window);
+            }
+        }
+        
+        // ASDA Sign
+        const signGeometry = new THREE.BoxGeometry(25, 8, 1);
+        const signMaterial = new THREE.MeshLambertMaterial({ color: 0xFFFFFF }); // White background
+        const sign = new THREE.Mesh(signGeometry, signMaterial);
+        sign.position.set(0, 30, 18);
+        asdaGroup.add(sign);
+        
+        // ASDA text on sign (using colored rectangles to spell out ASDA)
+        const letterMaterial = new THREE.MeshLambertMaterial({ color: 0x00B04F }); // Green letters
+        
+        // Letter A
+        const letterGeometry = new THREE.BoxGeometry(1.5, 4, 0.2);
+        const letterA1 = new THREE.Mesh(letterGeometry, letterMaterial);
+        letterA1.position.set(-8, 30, 18.2);
+        asdaGroup.add(letterA1);
+        
+        // Letter S
+        const letterS = new THREE.Mesh(letterGeometry, letterMaterial);
+        letterS.position.set(-4, 30, 18.2);
+        asdaGroup.add(letterS);
+        
+        // Letter D
+        const letterD = new THREE.Mesh(letterGeometry, letterMaterial);
+        letterD.position.set(0, 30, 18.2);
+        asdaGroup.add(letterD);
+        
+        // Letter A (second)
+        const letterA2 = new THREE.Mesh(letterGeometry, letterMaterial);
+        letterA2.position.set(4, 30, 18.2);
+        asdaGroup.add(letterA2);
+        
+        // Shopping cart bay
+        const cartBayGeometry = new THREE.BoxGeometry(8, 3, 6);
+        const cartBayMaterial = new THREE.MeshLambertMaterial({ color: 0xC0C0C0 }); // Silver
+        const cartBay = new THREE.Mesh(cartBayGeometry, cartBayMaterial);
+        cartBay.position.set(-35, 1.5, 15);
+        asdaGroup.add(cartBay);
+        
+        // Parking spaces (white lines)
+        const lineGeometry = new THREE.BoxGeometry(15, 0.1, 1);
+        const lineMaterial = new THREE.MeshLambertMaterial({ color: 0xFFFFFF });
+        for (let i = 0; i < 6; i++) {
+            const line1 = new THREE.Mesh(lineGeometry, lineMaterial);
+            line1.position.set(-20 + i * 8, 0.1, 35);
+            const line2 = new THREE.Mesh(lineGeometry, lineMaterial);
+            line2.position.set(-20 + i * 8, 0.1, 50);
+            asdaGroup.add(line1);
+            asdaGroup.add(line2);
+        }
+        
+        // Position the entire ASDA supermarket
+        asdaGroup.position.set(-600, getTerrainHeight(-600, -600), -600);
+        scene.add(asdaGroup);
+        
+        // Pony Farm (moved to edge of map) - Comprehensive farm complex
+        const ponyFarmGroup = new THREE.Group();
+        
+        // Main barn building (red with white trim)
+        const barnGeometry = new THREE.BoxGeometry(40, 20, 25);
+        const barnMaterial = new THREE.MeshLambertMaterial({ color: 0x8B0000 }); // Dark red
+        const barn = new THREE.Mesh(barnGeometry, barnMaterial);
+        barn.position.set(0, 10, 0);
+        barn.castShadow = true;
+        ponyFarmGroup.add(barn);
+        
+        // Barn roof (triangular)
+        const roofGeometry = new THREE.ConeGeometry(23, 8, 4);
+        const roofMaterial = new THREE.MeshLambertMaterial({ color: 0x4A4A4A }); // Dark gray
+        const roof = new THREE.Mesh(roofGeometry, roofMaterial);
+        roof.position.set(0, 24, 0);
+        roof.rotation.y = Math.PI / 4; // Rotate to make it diamond-shaped from above
+        roof.castShadow = true;
+        ponyFarmGroup.add(roof);
+        
+        // White trim on barn
+        const trimGeometry = new THREE.BoxGeometry(41, 2, 26);
+        const trimMaterial = new THREE.MeshLambertMaterial({ color: 0xFFFFFF });
+        const trim = new THREE.Mesh(trimGeometry, trimMaterial);
+        trim.position.set(0, 6, 0);
+        ponyFarmGroup.add(trim);
+        
+        // Barn doors (large wooden doors)
+        const barnDoorGeometry = new THREE.BoxGeometry(8, 12, 0.5);
+        const barnDoorMaterial = new THREE.MeshLambertMaterial({ color: 0x654321 }); // Brown
+        const leftDoor = new THREE.Mesh(barnDoorGeometry, barnDoorMaterial);
+        leftDoor.position.set(-4, 6, 12.8);
+        ponyFarmGroup.add(leftDoor);
+        
+        const rightDoor = new THREE.Mesh(barnDoorGeometry, barnDoorMaterial);
+        rightDoor.position.set(4, 6, 12.8);
+        ponyFarmGroup.add(rightDoor);
+        
+        // Stable extensions (smaller buildings on sides)
+        const stableGeometry = new THREE.BoxGeometry(15, 12, 20);
+        const stableMaterial = new THREE.MeshLambertMaterial({ color: 0x8B4513 }); // Brown
+        
+        const leftStable = new THREE.Mesh(stableGeometry, stableMaterial);
+        leftStable.position.set(-30, 6, -5);
+        leftStable.castShadow = true;
+        ponyFarmGroup.add(leftStable);
+        
+        const rightStable = new THREE.Mesh(stableGeometry, stableMaterial);
+        rightStable.position.set(30, 6, -5);
+        rightStable.castShadow = true;
+        ponyFarmGroup.add(rightStable);
+        
+        // Fence posts around the farm
+        for (let i = 0; i < 20; i++) {
+            const angle = (i / 20) * Math.PI * 2;
+            const radius = 60;
+            const fenceGeometry = new THREE.BoxGeometry(0.5, 8, 0.5);
+            const fenceMaterial = new THREE.MeshLambertMaterial({ color: 0x8B4513 });
+            const fencePost = new THREE.Mesh(fenceGeometry, fenceMaterial);
+            fencePost.position.set(
+                Math.cos(angle) * radius,
+                4,
+                Math.sin(angle) * radius
+            );
+            ponyFarmGroup.add(fencePost);
+        }
+        
+        // Farm sign with horse head
+        const signPostGeometry = new THREE.BoxGeometry(1, 15, 1);
+        const signPostMaterial = new THREE.MeshLambertMaterial({ color: 0x8B4513 });
+        const signPost = new THREE.Mesh(signPostGeometry, signPostMaterial);
+        signPost.position.set(-25, 7.5, 20);
+        ponyFarmGroup.add(signPost);
+        
+        // Sign board (white background)
+        const signBoardGeometry = new THREE.BoxGeometry(20, 12, 1);
+        const signBoardMaterial = new THREE.MeshLambertMaterial({ color: 0xFFFFF0 }); // Off-white
+        const signBoard = new THREE.Mesh(signBoardGeometry, signBoardMaterial);
+        signBoard.position.set(-25, 12, 20);
+        ponyFarmGroup.add(signBoard);
+        
+        // Horse head silhouette on sign (simplified geometric shape)
+        const horseHeadGroup = new THREE.Group();
+        
+        // Horse head main shape
+        const headGeometry = new THREE.BoxGeometry(6, 8, 0.5);
+        const headMaterial = new THREE.MeshLambertMaterial({ color: 0x2F1B14 }); // Dark brown
+        const head = new THREE.Mesh(headGeometry, headMaterial);
+        head.position.set(0, 2, 0);
+        horseHeadGroup.add(head);
+        
+        // Horse muzzle
+        const muzzleGeometry = new THREE.BoxGeometry(3, 3, 0.5);
+        const muzzle = new THREE.Mesh(muzzleGeometry, headMaterial);
+        muzzle.position.set(0, -2, 0);
+        horseHeadGroup.add(muzzle);
+        
+        // Horse ears
+        const earGeometry = new THREE.ConeGeometry(1, 3, 3);
+        const leftEar = new THREE.Mesh(earGeometry, headMaterial);
+        leftEar.position.set(-2, 5, 0);
+        horseHeadGroup.add(leftEar);
+        
+        const rightEar = new THREE.Mesh(earGeometry, headMaterial);
+        rightEar.position.set(2, 5, 0);
+        horseHeadGroup.add(rightEar);
+        
+        // Position horse head on sign
+        horseHeadGroup.position.set(-25, 12, 20.3);
+        ponyFarmGroup.add(horseHeadGroup);
+        
+        // "PONY FARM" text on sign (using geometric shapes for letters)
+        const signLetterMaterial = new THREE.MeshLambertMaterial({ color: 0x2F1B14 });
+        
+        // Simple text representation using boxes
+        const textGeometry = new THREE.BoxGeometry(12, 2, 0.3);
+        const farmText = new THREE.Mesh(textGeometry, signLetterMaterial);
+        farmText.position.set(-25, 8, 20.3);
+        ponyFarmGroup.add(farmText);
+        
+        // Feed troughs
+        const troughGeometry = new THREE.BoxGeometry(8, 2, 3);
+        const troughMaterial = new THREE.MeshLambertMaterial({ color: 0x654321 });
+        
+        const trough1 = new THREE.Mesh(troughGeometry, troughMaterial);
+        trough1.position.set(-35, 1, 10);
+        ponyFarmGroup.add(trough1);
+        
+        const trough2 = new THREE.Mesh(troughGeometry, troughMaterial);
+        trough2.position.set(35, 1, 10);
+        ponyFarmGroup.add(trough2);
+        
+        // Position the entire pony farm
+        ponyFarmGroup.position.set(400, getTerrainHeight(400, 600), 600);
+        scene.add(ponyFarmGroup);
         
         // Add a distinctive lone tree landmark
         const loneTreeGeometry = new THREE.ConeGeometry(8, 25, 8);
@@ -2450,7 +2669,7 @@ document.addEventListener('DOMContentLoaded', () => {
             // Can sell wild plants, fish, and harvested crops
             const isWildPlant = WILD_PLANTS.hasOwnProperty(item.name);
             const isFish = ['Trout', 'Salmon', 'Pike', 'Perch'].includes(item.name);
-            const isHarvestedCrop = ['Pear', 'Pumpkin'].includes(item.name);
+            const isHarvestedCrop = ['Pear', 'Pumpkin', 'Apple'].includes(item.name);
             return isWildPlant || isFish || isHarvestedCrop;
         });
         
@@ -2652,15 +2871,15 @@ document.addEventListener('DOMContentLoaded', () => {
         
         if (seedName.includes('Apple')) {
             plantType = 'Apple Tree';
-            growthTimeMinutes = 3; // 3 minutes game time
+            growthTimeMinutes = 1440; // 1 full day (24 hours) game time
             harvestItem = 'Apple';
         } else if (seedName.includes('Pear')) {
             plantType = 'Pear Tree';
-            growthTimeMinutes = 3; // 3 minutes game time
+            growthTimeMinutes = 1440; // 1 full day (24 hours) game time
             harvestItem = 'Pear';
         } else if (seedName.includes('Pumpkin')) {
             plantType = 'Pumpkin Vine';
-            growthTimeMinutes = 2; // 2 minutes game time
+            growthTimeMinutes = 720; // Half day (12 hours) game time
             harvestItem = 'Pumpkin';
         }
         
@@ -2701,6 +2920,12 @@ document.addEventListener('DOMContentLoaded', () => {
             // Small sprout for newly planted seeds
             geometry = new THREE.ConeGeometry(0.5, 2, 6);
             material = new THREE.MeshLambertMaterial({ color: 0x90EE90 }); // Light green
+            mesh = new THREE.Mesh(geometry, material);
+            mesh.position.set(plant.x, plant.z + 1, plant.y);
+            mesh.userData = { plantId: plant.id, isPlant: true };
+            mesh.castShadow = true;
+            scene.add(mesh);
+            plant.mesh = mesh;
         } else {
             // Full grown plant
             if (plant.plantType.includes('Tree')) {
@@ -2716,28 +2941,61 @@ document.addEventListener('DOMContentLoaded', () => {
                 const leaves = new THREE.Mesh(leavesGeometry, leavesMaterial);
                 leaves.position.set(plant.x, plant.z + 10, plant.y);
                 
-                // Group trunk and leaves
+                // Add fruits only when tree is harvestable (fully grown)
+                let fruits = [];
+                if (plant.harvestItem === 'Apple') {
+                    // Add red apples
+                    for (let i = 0; i < 3; i++) {
+                        const fruitMesh = new THREE.Mesh(
+                            new THREE.SphereGeometry(0.8, 8, 8),
+                            new THREE.MeshLambertMaterial({ color: 0xff0000 })
+                        );
+                        const angle = (i / 3) * Math.PI * 2;
+                        fruitMesh.position.set(
+                            plant.x + Math.cos(angle) * 3, 
+                            plant.z + 10 + Math.sin(i) * 2, 
+                            plant.y + Math.sin(angle) * 3
+                        );
+                        fruits.push(fruitMesh);
+                    }
+                } else if (plant.harvestItem === 'Pear') {
+                    // Add green pears
+                    for (let i = 0; i < 3; i++) {
+                        const fruitMesh = new THREE.Mesh(
+                            new THREE.SphereGeometry(0.7, 8, 8),
+                            new THREE.MeshLambertMaterial({ color: 0x90EE90 })
+                        );
+                        const angle = (i / 3) * Math.PI * 2;
+                        fruitMesh.position.set(
+                            plant.x + Math.cos(angle) * 3, 
+                            plant.z + 9 + Math.sin(i) * 2, 
+                            plant.y + Math.sin(angle) * 3
+                        );
+                        fruits.push(fruitMesh);
+                    }
+                }
+                
+                // Group trunk, leaves, and fruits
                 const treeGroup = new THREE.Group();
                 treeGroup.add(mesh);
                 treeGroup.add(leaves);
+                fruits.forEach(fruit => treeGroup.add(fruit));
                 treeGroup.userData = { plantId: plant.id, isPlant: true };
                 scene.add(treeGroup);
                 plant.mesh = treeGroup;
-                return;
                 
             } else {
                 // Pumpkin vine
                 geometry = new THREE.SphereGeometry(2, 8, 8);
                 material = new THREE.MeshLambertMaterial({ color: 0xFF6347 }); // Orange
+                mesh = new THREE.Mesh(geometry, material);
+                mesh.position.set(plant.x, plant.z + 1, plant.y);
+                mesh.userData = { plantId: plant.id, isPlant: true };
+                mesh.castShadow = true;
+                scene.add(mesh);
+                plant.mesh = mesh;
             }
         }
-        
-        mesh = new THREE.Mesh(geometry, material);
-        mesh.position.set(plant.x, plant.z + 1, plant.y);
-        mesh.userData = { plantId: plant.id, isPlant: true };
-        mesh.castShadow = true;
-        scene.add(mesh);
-        plant.mesh = mesh;
     }
     
     function updatePlants() {
@@ -2746,17 +3004,41 @@ document.addEventListener('DOMContentLoaded', () => {
         gameState.world.plantedSeeds.forEach(plant => {
             if (!plant.isGrown) {
                 const timeSincePlanted = currentGameTime - plant.plantedTime;
+                
+                // Gradual growth: scale up tree mesh over time
+                if (plant.mesh && plant.plantType.includes('Tree')) {
+                    let growthProgress = Math.min(timeSincePlanted / plant.growthTimeMinutes, 1);
+                    // Scale from 0.1 to 1.0 as it grows (more dramatic growth)
+                    const scale = 0.1 + 0.9 * growthProgress;
+                    plant.mesh.scale.set(scale, scale, scale);
+                    
+                    // Add visual growth stages for better feedback
+                    if (growthProgress < 0.25) {
+                        // Seedling stage (0-25%)
+                        plant.mesh.userData.growthStage = 'seedling';
+                    } else if (growthProgress < 0.5) {
+                        // Young tree stage (25-50%)
+                        plant.mesh.userData.growthStage = 'young';
+                    } else if (growthProgress < 0.75) {
+                        // Maturing tree stage (50-75%)
+                        plant.mesh.userData.growthStage = 'maturing';
+                    } else if (growthProgress < 1.0) {
+                        // Nearly mature stage (75-100%)
+                        plant.mesh.userData.growthStage = 'nearly_mature';
+                    }
+                }
+                
                 if (timeSincePlanted >= plant.growthTimeMinutes) {
                     // Plant has grown!
                     plant.isGrown = true;
                     
-                    // Remove old mesh and create new grown mesh
+                    // Remove old mesh and create new grown mesh (with fruit)
                     if (plant.mesh && scene) {
                         scene.remove(plant.mesh);
                     }
                     createPlant3D(plant);
                     
-                    showNotification(`🌿 Your ${plant.plantType} has finished growing!`);
+                    showNotification(`🌿 Your ${plant.plantType} has finished growing after a full day and is ready to harvest!`);
                 }
             }
         });
