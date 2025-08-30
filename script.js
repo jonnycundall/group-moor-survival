@@ -4882,7 +4882,7 @@ document.addEventListener('DOMContentLoaded', () => {
         // Check if player is too far from map center (ponies get scared in unfamiliar territory)
         const distanceFromCenter = Math.sqrt(gameState.player.x * gameState.player.x + gameState.player.y * gameState.player.y);
         
-        if (distanceFromCenter > terrainSize * 0.4) { // 40% of terrain size
+        if (distanceFromCenter > terrainSize * 0.8) { // 40% of terrain size
             // Auto-return pony
             const ponyName = gameState.pony.type;
             
